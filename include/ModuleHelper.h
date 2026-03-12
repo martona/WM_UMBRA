@@ -48,24 +48,27 @@ namespace ModuleHelper
 	class ModuleHandle
 	{
 	public:
-		enum InitMode {
-			loadLibraryEx,
-			getModuleHandle
+		// Initialization mode for module loading functions
+		enum class InitMode : unsigned char {
+			LoadLibraryEx, 	// Load module using LoadLibraryEx with specified flags (default: LOAD_LIBRARY_SEARCH_SYSTEM32)
+			GetModuleHandle // Get module handle of already loaded module using GetModuleHandle
+			// Note: LoadLibrary (without Ex) is not recommended due to potential DLL search path issues, but can be added if needed.
+			// Values 2 and above are reserved for future use or internal purposes.
 		};
 
 	public:
 		// Constructors
 		ModuleHandle() = delete;
-		explicit ModuleHandle(HMODULE hModule) : hModule_(hModule) {};
-		explicit ModuleHandle(const wchar_t* moduleName, int initMode = loadLibraryEx, int flag = -1) {
-			if (initMode == getModuleHandle)
+		explicit ModuleHandle(HMODULE hModule) : hModule_(hModule) {}
+		explicit ModuleHandle(const wchar_t* moduleName, InitMode initMode = InitMode::LoadLibraryEx, int flag = -1) {
+			if (initMode == InitMode::GetModuleHandle)
 				hModule_ = GetModuleHandle(moduleName);
-			else if (initMode == loadLibraryEx) {
+			else if (initMode == InitMode::LoadLibraryEx) {
 				if (flag < 0) flag = LOAD_LIBRARY_SEARCH_SYSTEM32;		// default
 				hModule_ = LoadLibraryEx(moduleName, nullptr, flag);
-				isAutoFree_ = IsLoaded();
+				isAutoFree_ = isLoaded();
 			}
-		};
+		}
 
 		// No copyable
 		ModuleHandle(const ModuleHandle&) = delete;
@@ -79,35 +82,35 @@ namespace ModuleHelper
 		~ModuleHandle() {
 			if (hModule_ != nullptr && isAutoFree_)
 				FreeLibrary(hModule_);
-		};
+		}
 
 	public:
 		// Get module handle pointer
-		[[nodiscard]] HMODULE Get() const noexcept {
+		[[nodiscard]] HMODULE get() const noexcept {
 			return hModule_;
-		};
+		}
 
 		// Is module loaded successfully???
-		[[nodiscard]] bool IsLoaded() const noexcept {
+		[[nodiscard]] bool isLoaded() const noexcept {
 			return hModule_ != nullptr;
-		};
+		}
 
 		// Load function from module by name
 		template <typename FuncPtr>
-		auto LoadFunction(FuncPtr& pointer, const char* name) const -> bool {
+		auto loadFunction(FuncPtr& pointer, const char* name) const -> bool {
 			if (!hModule_) return false;
 			if (auto proc = ::GetProcAddress(hModule_, name); proc != nullptr) {
 				pointer = reinterpret_cast<FuncPtr>(proc);
 				return true;
 			}
 			return false;
-		};
+		}
 
 		// Load function from module by index
 		template <typename FuncPtr>
-		auto LoadFunction(FuncPtr& pointer, int index) const -> bool {
-			return LoadFunction(pointer, MAKEINTRESOURCEA(static_cast<int>(index)));
-		};
+		auto loadFunction(FuncPtr& pointer, int index) const -> bool {
+			return loadFunction(pointer, MAKEINTRESOURCEA(static_cast<int>(index)));
+		}
 
 	private:
 		HMODULE hModule_ = nullptr;
@@ -116,7 +119,7 @@ namespace ModuleHelper
 
 	// Replace function pointer
 	template <typename FuncPtr>
-	static auto ReplaceFunction(IMAGE_THUNK_DATA* addr, const FuncPtr& newFunction) -> FuncPtr
+	static auto replaceFunction(IMAGE_THUNK_DATA* addr, const FuncPtr& newFunction) -> FuncPtr
 	{
 		DWORD oldProtect = 0;
 		if (!VirtualProtect(addr, sizeof(IMAGE_THUNK_DATA), PAGE_READWRITE, &oldProtect))
@@ -126,21 +129,21 @@ namespace ModuleHelper
 		addr->u1.Function = reinterpret_cast<uintptr_t>(newFunction);
 		VirtualProtect(addr, sizeof(IMAGE_THUNK_DATA), oldProtect, &oldProtect);
 		return reinterpret_cast<FuncPtr>(oldFunction);
-	};
+	}
 
 	// Load function from module by name
 	template <typename FuncPtr>
-	static auto LoadFunction(HMODULE handle, FuncPtr& pointer, const char* name) -> bool {
+	static auto loadFunction(HMODULE handle, FuncPtr& pointer, const char* name) -> bool {
 		if (auto proc = ::GetProcAddress(handle, name); proc != nullptr) {
 			pointer = reinterpret_cast<FuncPtr>(proc);
 			return true;
 		}
 		return false;
-	};
+	}
 
 	// Load function from module by index
 	template <typename FuncPtr>
-	static auto LoadFunction(HMODULE handle, FuncPtr& pointer, int index) -> bool {
-		return LoadFunction(handle, pointer, MAKEINTRESOURCEA(static_cast<int>(index)));
-	};
+	static auto loadFunction(HMODULE handle, FuncPtr& pointer, int index) -> bool {
+		return loadFunction(handle, pointer, MAKEINTRESOURCEA(static_cast<int>(index)));
+	}
 };

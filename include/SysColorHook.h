@@ -44,9 +44,53 @@
 
 namespace SysColorHook
 {
+	/**
+	 * @brief Function pointer type for the original `GetSysColor` function.
+	 * 
+	 * This type is used to store the address of the original `GetSysColor` function before it is hooked,
+	 * allowing the hook to call the original function for indices that are not overridden.
+	 * 
+	 * @param nIndex The index of the system color to retrieve.
+	 * @return The color value corresponding to the specified system color index.
+	 * 
+	 * @remarks The `GetSysColor` function is a Windows API function that retrieves the current color of a specified display element,
+	 * 			such as the background color of a window or the text color of a control. By hooking this function, 
+	 * 			we can return custom color values for specific indices to achieve a consistent dark mode appearance.
+	 */
 	using fnGetSysColor = auto (WINAPI*)(int nIndex)->DWORD;
 
+	/**
+	 * @brief Override specific system colors with custom values.
+	 * 
+	 * @param nIndex The index of the system color to override.
+	 * @param clr The custom color value to use for the specified system color.
+	 * 
+	 * @remarks This function allows for dynamic customization of system colors, 
+	 * 			which can be useful for implementing dark mode or other visual themes.
+	 * @remarks Supported system color indices include:
+	 * - `COLOR_WINDOW`: Background of ComboBoxEx list.
+	 * - `COLOR_WINDOWTEXT`: Text color of ComboBoxEx list.
+	 * - `COLOR_BTNFACE`: Gridline color in ListView (when applicable).
+	 * @remarks The hook will intercept calls to `GetSysColor` and return the specified custom color for the targeted indices, 
+	 * 			while allowing other system colors to be retrieved normally.
+	 */
 	void SetMySysColor(int nIndex, COLORREF clr) noexcept;
+
+	/**
+	 * @brief Installs a hook to override the `GetSysColor` function for specific color indices.
+	 * 
+	 * This function replaces the `GetSysColor` function in the import address table (IAT) of the target module 
+	 * with a custom implementation that returns overridden color values for certain indices.
+	 * 
+	 * @return `true` if the hook was successfully installed; otherwise, `false`.
+	 */
 	bool HookSysColor();
+
+	/**
+	 * @brief Uninstalls the previously installed `GetSysColor` hook.
+	 * 
+	 * This function restores the original `GetSysColor` function in the IAT, removing any overrides for system colors.
+	 * It also manages reference counting to ensure that the hook is only removed when no longer needed.
+	 */
 	void UnhookSysColor();
 };

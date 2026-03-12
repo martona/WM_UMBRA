@@ -65,6 +65,7 @@ static fnGetSysColor pfGetSysColor	= nullptr;
 static bool g_isGetSysColorHooked	= false;
 static int g_hookRefCount			= 0;
 
+/// Custom colors for overridden system color indices
 static COLORREF g_clrWindow		= RGB(32, 32, 32);
 static COLORREF g_clrText		= RGB(224, 224, 224);
 static COLORREF g_clrGridLines	= RGB(100, 100, 100);
@@ -118,15 +119,15 @@ static DWORD WINAPI GetSysColorProc(int nIndex)
 bool SysColorHook::HookSysColor()
 {
 	const ModuleHandle moduleComctl(L"comctl32.dll");
-	if (!moduleComctl.IsLoaded())
+	if (!moduleComctl.isLoaded())
 		return false;
 
 	if (pfGetSysColor == nullptr || !g_isGetSysColorHooked)
 	{
-		auto* addr = FindIatThunkInModule(moduleComctl.Get(), "user32.dll", "GetSysColor");
+		auto* addr = FindIatThunkInModule(moduleComctl.get(), "user32.dll", "GetSysColor");
 		if (addr != nullptr)
 		{
-			pfGetSysColor = ReplaceFunction<fnGetSysColor>(addr, GetSysColorProc);
+			pfGetSysColor = replaceFunction<fnGetSysColor>(addr, GetSysColorProc);
 			g_isGetSysColorHooked = true;
 		}
 		else
@@ -143,7 +144,7 @@ bool SysColorHook::HookSysColor()
 void SysColorHook::UnhookSysColor()
 {
 	const ModuleHandle moduleComctl(L"comctl32.dll");
-	if (!moduleComctl.IsLoaded())
+	if (!moduleComctl.isLoaded())
 		return;
 
 	if (!g_isGetSysColorHooked)
@@ -154,10 +155,10 @@ void SysColorHook::UnhookSysColor()
 
 	if (g_hookRefCount == 0)
 	{
-		auto* addr = FindIatThunkInModule(moduleComctl.Get(), "user32.dll", "GetSysColor");
+		auto* addr = FindIatThunkInModule(moduleComctl.get(), "user32.dll", "GetSysColor");
 		if (addr != nullptr)
 		{
-			ReplaceFunction<fnGetSysColor>(addr, pfGetSysColor);
+			replaceFunction<fnGetSysColor>(addr, pfGetSysColor);
 			g_isGetSysColorHooked = false;
 		}
 	}

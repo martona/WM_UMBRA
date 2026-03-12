@@ -257,11 +257,11 @@ static HTHEME WINAPI MyOpenNcThemeData(HWND hWnd, LPCWSTR pszClassList)
 static void FixDarkScrollBar()
 {
 	const ModuleHandle moduleComctl(L"comctl32.dll");
-	if (moduleComctl.IsLoaded())
+	if (moduleComctl.isLoaded())
 	{
-		auto* addr = FindDelayLoadThunkInModule(moduleComctl.Get(), "uxtheme.dll", 49); // OpenNcThemeData
+		auto* addr = FindDelayLoadThunkInModule(moduleComctl.get(), "uxtheme.dll", 49); // OpenNcThemeData
 		if (addr != nullptr) // && pfOpenNcThemeData != nullptr) // checked in InitDarkMode
-			ReplaceFunction<fnOpenNcThemeData>(addr, MyOpenNcThemeData);
+			replaceFunction<fnOpenNcThemeData>(addr, MyOpenNcThemeData);
 	}
 }
 
@@ -274,41 +274,41 @@ void DarkModeHelper::InitDarkMode()
 
 	using namespace WinVerHelper;
 	DWORD major = 0, minor = 0, buildNumber = 0;
-	if (!GetOSVersionNumber(major, minor, buildNumber))
+	if (!getOSVersionNumber(major, minor, buildNumber))
 		return;
 
 	if (major == 10 && minor == 0 && g_buildNumber >= MinSupportVersion)
 	{
 		const ModuleHandle moduleUxtheme(L"uxtheme.dll");
-		if (!moduleUxtheme.IsLoaded())
+		if (!moduleUxtheme.isLoaded())
 			return;
 
 		bool isAllFuncLoadedOK = false;
 
 #if defined(_DARKMODE_SUPPORT_OLDER_OS)
 		if (g_buildNumber < WinVer::WIN10_VER_1903)
-			isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfAllowDarkModeForApp, 135);
+			isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfAllowDarkModeForApp, 135);
 		else
 #endif
-			isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfSetPreferredAppMode, 135);
+			isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfSetPreferredAppMode, 135);
 
 		// Load all necessary functions
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfOpenNcThemeData, 49);
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfRefreshImmersiveColorPolicyState, 104);
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfShouldAppsUseDarkMode, 132);
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfAllowDarkModeForWindow, 133);
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfFlushMenuThemes, 136);
-		isAllFuncLoadedOK |= moduleUxtheme.LoadFunction(pfIsDarkModeAllowedForWindow, 137);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfOpenNcThemeData, 49);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfRefreshImmersiveColorPolicyState, 104);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfShouldAppsUseDarkMode, 132);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfAllowDarkModeForWindow, 133);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfFlushMenuThemes, 136);
+		isAllFuncLoadedOK |= moduleUxtheme.loadFunction(pfIsDarkModeAllowedForWindow, 137);
 
 		if (isAllFuncLoadedOK)
 			g_darkModeSupported = true;
 
-		moduleUxtheme.LoadFunction(pfGetIsImmersiveColorUsingHighContrast, 106);
+		moduleUxtheme.loadFunction(pfGetIsImmersiveColorUsingHighContrast, 106);
 
 #if defined(_DARKMODE_SUPPORT_OLDER_OS)
 		if (g_buildNumber < WinVer::WIN10_VER_2004)	{
-			ModuleHandle moduleUser32(L"user32.dll", ModuleHandle::getModuleHandle);
-			moduleUser32.LoadFunction(pfSetWindowCompositionAttribute, "SetWindowCompositionAttribute");
+			ModuleHandle moduleUser32(L"user32.dll", ModuleHandle::InitMode::GetModuleHandle);
+			moduleUser32.loadFunction(pfSetWindowCompositionAttribute, "SetWindowCompositionAttribute");
 		}
 #endif
 		isInit = true;

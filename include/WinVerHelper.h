@@ -45,8 +45,7 @@
 
 namespace WinVerHelper
 {
-	enum WinVer
-	{
+	enum WinVer {
 		// Windows 10 versions
 		WIN10_VER_1507 = (unsigned short)10240,	// Original release
 		WIN10_VER_1511 = (unsigned short)10586,	// November Update
@@ -72,13 +71,13 @@ namespace WinVerHelper
 	};
 
 	// Get Windows OS version build number
-	inline bool GetOSVersionNumber(DWORD &major, DWORD &minor, DWORD &buildNumber) noexcept {
+	inline bool getOSVersionNumber(DWORD &major, DWORD &minor, DWORD &buildNumber) noexcept {
 		using namespace ModuleHelper;
-		ModuleHandle moduleNtDll(L"ntdll.dll", ModuleHandle::getModuleHandle);
-		if (moduleNtDll.IsLoaded()) {
+		ModuleHandle moduleNtDll(L"ntdll.dll", ModuleHandle::InitMode::GetModuleHandle);
+		if (moduleNtDll.isLoaded()) {
 			using fnRtlGetNtVersionNumbers = void (WINAPI*)(LPDWORD major, LPDWORD minor, LPDWORD build);
 			fnRtlGetNtVersionNumbers RtlGetNtVersionNumbers = nullptr;
-			if (moduleNtDll.LoadFunction(RtlGetNtVersionNumbers, "RtlGetNtVersionNumbers") && RtlGetNtVersionNumbers)
+			if (moduleNtDll.loadFunction(RtlGetNtVersionNumbers, "RtlGetNtVersionNumbers") && RtlGetNtVersionNumbers)
 			{
 				RtlGetNtVersionNumbers(&major, &minor, &buildNumber);
 				buildNumber &= ~0xF0000000;
@@ -87,10 +86,10 @@ namespace WinVerHelper
 		}
 
 		return false;
-	};
+	}
 
 	// Check if is a Windows version or later
-	[[nodiscard]] inline bool IsWinVer_OrLater(WORD wVersion, WORD wBuildNumber = 0) noexcept {
+	[[nodiscard]] inline bool isWinVer_OrLater(WORD wVersion, WORD wBuildNumber = 0) noexcept {
 		DWORDLONG dwlConditionMask = 0;
 		VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, VER_GREATER_EQUAL);
 		VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, VER_GREATER_EQUAL);
@@ -102,15 +101,15 @@ namespace WinVerHelper
 		osvi.dwBuildNumber = wBuildNumber;
 
 		return !!VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER, dwlConditionMask);
-	};
+	}
 
 	// Is Windows 10 version or later???
-	[[nodiscard]] inline bool IsWindows10_OrLater() noexcept {
-		return IsWinVer_OrLater(0x0a00, WIN10_VER_1507);
-	};
+	[[nodiscard]] inline bool isWindows10_OrLater() noexcept {
+		return isWinVer_OrLater(0x0a00, WIN10_VER_1507);
+	}
 
 	// Is Windows 11 version or later???
-	[[nodiscard]] inline bool IsWindows11_OrLater() noexcept {
-		return IsWinVer_OrLater(0x0a00, WIN11_VER_21H2);
-	};
+	[[nodiscard]] inline bool isWindows11_OrLater() noexcept {
+		return isWinVer_OrLater(0x0a00, WIN11_VER_21H2);
+	}
 };

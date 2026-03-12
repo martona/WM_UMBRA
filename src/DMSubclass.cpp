@@ -1649,7 +1649,7 @@ namespace DarkMode
 	 */
 	bool isAtLeastWindows10() noexcept
 	{
-		return WinVerHelper::IsWindows10_OrLater();
+		return WinVerHelper::isWindows10_OrLater();
 	}
 	/**
 	 * @brief Checks if the host OS is at least Windows 11.
@@ -1658,7 +1658,7 @@ namespace DarkMode
 	 */
 	bool isAtLeastWindows11() noexcept
 	{
-		return WinVerHelper::IsWindows11_OrLater();
+		return WinVerHelper::isWindows11_OrLater();
 	}
 
 	/**
@@ -1669,7 +1669,7 @@ namespace DarkMode
 	DWORD getWindowsBuildNumber() noexcept
 	{
 		DWORD major = 0, minor = 0, buildNumber = 0;
-		WinVerHelper::GetOSVersionNumber(major, minor, buildNumber);
+		WinVerHelper::getOSVersionNumber(major, minor, buildNumber);
 		return buildNumber;
 	}
 
