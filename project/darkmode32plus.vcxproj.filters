@@ -47,6 +47,9 @@
   
   <!-- Source files -->
   <ItemGroup>
+    <ClCompile Include="../src/DarkMessageBox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="../src/DarkMode.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

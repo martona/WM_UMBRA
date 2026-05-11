@@ -588,6 +588,11 @@ namespace DarkMode
 	[[nodiscard]] LRESULT onCtlColorListbox(WPARAM wParam, LPARAM lParam);
 
 	// ========================================================================
+	// Darkmode-aware MessageBox
+	// ========================================================================
+	int DarkMessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type);
+
+	// ========================================================================
 	// Hook Callback Dialog Procedure
 	// ========================================================================
 
