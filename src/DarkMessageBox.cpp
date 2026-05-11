@@ -181,6 +181,9 @@ namespace
     bool IsDialogWindow(HWND hwnd)
     {
         wchar_t cls[32]{};
+		#ifndef _countof
+			#define _countof(arr) (sizeof(arr) / sizeof((arr)[0]))
+		#endif
         ::GetClassNameW(hwnd, cls, _countof(cls));
         return std::wcscmp(cls, L"#32770") == 0;
     }
