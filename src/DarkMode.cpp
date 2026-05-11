@@ -277,6 +277,8 @@ void DarkModeHelper::InitDarkMode()
 	if (!getOSVersionNumber(major, minor, buildNumber))
 		return;
 
+	g_buildNumber = buildNumber;
+
 	if (major == 10 && minor == 0 && g_buildNumber >= MinSupportVersion)
 	{
 		const ModuleHandle moduleUxtheme(L"uxtheme.dll");
