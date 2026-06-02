@@ -250,6 +250,11 @@ INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
             g_modeId = IDM_MODE_DARK;
             umbra::setDarkModeConfig(static_cast<UINT>(umbra::DarkModeType::dark));
             umbra::setDefaultColors(true);
+            // List/tree views use a separate, fixed view palette; point it at the tone's
+            // background so they follow the accent instead of staying default-dark.
+            umbra::setViewBackgroundColor(umbra::getBackgroundColor());
+            umbra::setViewTextColor(umbra::getTextColor());
+            umbra::updateViewBrushesAndPens();
             ReapplyTheme(hDlg);
             return TRUE;
 
