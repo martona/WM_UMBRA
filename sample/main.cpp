@@ -33,6 +33,7 @@ namespace
     HINSTANCE g_hInst    = nullptr;
     HWND      g_hToolbar = nullptr;
     HWND      g_hStatus  = nullptr;
+    int       g_modeId   = IDM_MODE_SYSTEM;  // active Mode item, for the radio check
 
     void UpdateModeStatus()
     {
@@ -43,12 +44,25 @@ namespace
         }
     }
 
+    // Reflect the active mode + color tone as radio checks in the menus.
+    void UpdateMenuChecks(HWND hDlg)
+    {
+        HMENU menu = ::GetMenu(hDlg);
+        if (menu == nullptr)
+            return;
+        ::CheckMenuRadioItem(menu, IDM_MODE_SYSTEM, IDM_MODE_LIGHT, g_modeId, MF_BYCOMMAND);
+        const int toneId = IDM_TONE_BLACK + static_cast<int>(umbra::getColorTone());
+        ::CheckMenuRadioItem(menu, IDM_TONE_BLACK, IDM_TONE_OLIVE, toneId, MF_BYCOMMAND);
+    }
+
     // Re-apply the dark/light theme to the whole window tree and repaint.
     void ReapplyTheme(HWND hDlg)
     {
         umbra::setDarkWndNotifySafe(hDlg);
         umbra::setDarkTitleBar(hDlg);
         UpdateModeStatus();
+        UpdateMenuChecks(hDlg);
+        ::DrawMenuBar(hDlg);   // repaint the (subclassed) menu bar with the new colors
         ::RedrawWindow(hDlg, nullptr, nullptr,
             RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
     }
@@ -162,8 +176,10 @@ INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
         // One call themes the dialog, all of its child controls, the ctl-color
         // messages, custom draw, and the title bar.
         umbra::setDarkWndNotifySafe(hDlg);
+        umbra::setWindowMenuBarSubclass(hDlg);   // dark menu bar: background, items, highlight, bottom line
         umbra::setDarkTitleBar(hDlg);
         UpdateModeStatus();
+        UpdateMenuChecks(hDlg);
         ::SendMessageW(hDlg, WM_SIZE, 0, 0);   // dock the bars
         return TRUE;
 
@@ -202,19 +218,37 @@ INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
             return TRUE;
 
         case IDM_MODE_SYSTEM:
+            g_modeId = IDM_MODE_SYSTEM;
             umbra::setDarkModeConfig();
             umbra::setDefaultColors(true);
             ReapplyTheme(hDlg);
             return TRUE;
 
         case IDM_MODE_DARK:
+            g_modeId = IDM_MODE_DARK;
             umbra::setDarkModeConfig(static_cast<UINT>(umbra::DarkModeType::dark));
             umbra::setDefaultColors(true);
             ReapplyTheme(hDlg);
             return TRUE;
 
         case IDM_MODE_LIGHT:
+            g_modeId = IDM_MODE_LIGHT;
             umbra::setDarkModeConfig(static_cast<UINT>(umbra::DarkModeType::classic));
+            umbra::setDefaultColors(true);
+            ReapplyTheme(hDlg);
+            return TRUE;
+
+        case IDM_TONE_BLACK:
+        case IDM_TONE_RED:
+        case IDM_TONE_GREEN:
+        case IDM_TONE_BLUE:
+        case IDM_TONE_PURPLE:
+        case IDM_TONE_CYAN:
+        case IDM_TONE_OLIVE:
+            // Tones are dark-mode accent palettes, so picking one selects dark mode.
+            umbra::setColorTone(static_cast<umbra::ColorTone>(LOWORD(wParam) - IDM_TONE_BLACK));
+            g_modeId = IDM_MODE_DARK;
+            umbra::setDarkModeConfig(static_cast<UINT>(umbra::DarkModeType::dark));
             umbra::setDefaultColors(true);
             ReapplyTheme(hDlg);
             return TRUE;

@@ -20,6 +20,7 @@ light/dark theme.
 
 - 🖤 Native dark mode for classic Win32 windows, dialogs, and common controls
 - 🪟 Dark title bar, menus, scroll bars, list/tree views, and a dark-aware `MessageBox`
+- 🎨 Optional dark accent **color tones** (black, red, green, blue, purple, cyan, olive)
 - 🔄 Follows the OS app theme and re-themes **live** on `WM_SETTINGCHANGE`
 - 🧩 Hooks the system theming/`GetSysColor` paths for consistent results
 - 🏗️ Builds for **x86, x64, and ARM64**; ships an MSBuild solution **and** a CMake project
@@ -56,8 +57,8 @@ umbra::DarkMessageBox(hWnd, L"Hello from the dark side.", L"WM_UMBRA", MB_OK);
 ```
 
 A complete, runnable example lives in [`sample/`](sample) — a dialog with a
-menu, toolbar, status bar, the full control zoo, and a `Mode` menu to force
-dark/light/system.
+menu, toolbar, status bar, the full control zoo, a `Mode` menu (force
+dark/light/system), and a `Theme` menu (pick an accent color tone).
 
 ## Building
 

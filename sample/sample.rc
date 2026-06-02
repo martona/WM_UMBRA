@@ -16,6 +16,16 @@ BEGIN
         MENUITEM "Force &Dark",         IDM_MODE_DARK
         MENUITEM "Force &Light",        IDM_MODE_LIGHT
     END
+    POPUP "&Theme"
+    BEGIN
+        MENUITEM "&Black (default)",    IDM_TONE_BLACK
+        MENUITEM "&Red",                IDM_TONE_RED
+        MENUITEM "&Green",              IDM_TONE_GREEN
+        MENUITEM "B&lue",               IDM_TONE_BLUE
+        MENUITEM "&Purple",             IDM_TONE_PURPLE
+        MENUITEM "&Cyan",               IDM_TONE_CYAN
+        MENUITEM "&Olive",              IDM_TONE_OLIVE
+    END
     POPUP "&Help"
     BEGIN
         MENUITEM "&About WM_UMBRA",     IDM_HELP_ABOUT

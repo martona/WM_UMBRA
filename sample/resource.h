@@ -32,3 +32,12 @@
 #define IDM_MODE_DARK       40003
 #define IDM_MODE_LIGHT      40004
 #define IDM_HELP_ABOUT      40005
+
+// Dark-mode color tones (must stay in umbra::ColorTone order: black=0 .. olive=6)
+#define IDM_TONE_BLACK      40010
+#define IDM_TONE_RED        40011
+#define IDM_TONE_GREEN      40012
+#define IDM_TONE_BLUE       40013
+#define IDM_TONE_PURPLE     40014
+#define IDM_TONE_CYAN       40015
+#define IDM_TONE_OLIVE      40016
