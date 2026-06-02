@@ -1,0 +1,69 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "vs-base",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build/cmake/${presetName}",
+      "cacheVariables": { "UMBRA_BUILD_SAMPLE": "ON" }
+    },
+    {
+      "name": "x64-static",
+      "displayName": "x64 (static CRT /MT)",
+      "inherits": "vs-base",
+      "architecture": "x64",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+    },
+    {
+      "name": "x64-dynamic",
+      "displayName": "x64 (dynamic CRT /MD)",
+      "inherits": "vs-base",
+      "architecture": "x64",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+    },
+    {
+      "name": "x86-static",
+      "displayName": "x86 (static CRT /MT)",
+      "inherits": "vs-base",
+      "architecture": "Win32",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+    },
+    {
+      "name": "x86-dynamic",
+      "displayName": "x86 (dynamic CRT /MD)",
+      "inherits": "vs-base",
+      "architecture": "Win32",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+    },
+    {
+      "name": "arm64-static",
+      "displayName": "ARM64 (static CRT /MT)",
+      "inherits": "vs-base",
+      "architecture": "ARM64",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+    },
+    {
+      "name": "arm64-dynamic",
+      "displayName": "ARM64 (dynamic CRT /MD)",
+      "inherits": "vs-base",
+      "architecture": "ARM64",
+      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "x64-static-debug",      "configurePreset": "x64-static",   "configuration": "Debug" },
+    { "name": "x64-static-release",    "configurePreset": "x64-static",   "configuration": "Release" },
+    { "name": "x64-dynamic-debug",     "configurePreset": "x64-dynamic",  "configuration": "Debug" },
+    { "name": "x64-dynamic-release",   "configurePreset": "x64-dynamic",  "configuration": "Release" },
+    { "name": "x86-static-debug",      "configurePreset": "x86-static",   "configuration": "Debug" },
+    { "name": "x86-static-release",    "configurePreset": "x86-static",   "configuration": "Release" },
+    { "name": "x86-dynamic-debug",     "configurePreset": "x86-dynamic",  "configuration": "Debug" },
+    { "name": "x86-dynamic-release",   "configurePreset": "x86-dynamic",  "configuration": "Release" },
+    { "name": "arm64-static-debug",    "configurePreset": "arm64-static", "configuration": "Debug" },
+    { "name": "arm64-static-release",  "configurePreset": "arm64-static", "configuration": "Release" },
+    { "name": "arm64-dynamic-debug",   "configurePreset": "arm64-dynamic","configuration": "Debug" },
+    { "name": "arm64-dynamic-release", "configurePreset": "arm64-dynamic","configuration": "Release" }
+  ]
+}
