@@ -21,7 +21,7 @@ In your project's `vcpkg-configuration.json`:
     {
       "kind": "git",
       "repository": "https://github.com/martona/WM_UMBRA",
-      "baseline": "<latest WM_UMBRA main commit sha>",
+      "baseline": "9fce6ad321349cfb7715a64faf0aa91060dfe7ed",
       "packages": [ "umbra" ]
     }
   ]
@@ -35,7 +35,7 @@ and depend on it in `vcpkg.json`:
 ```
 
 The registry `baseline` is a commit SHA of this repo's `main` (it selects which
-versions are visible). Grab the latest with:
+versions are visible); the value above ships **v1.1.0**. Grab the latest with:
 
 ```powershell
 git ls-remote https://github.com/martona/WM_UMBRA.git main

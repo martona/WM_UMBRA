@@ -103,19 +103,27 @@ CRT}`, each multi-config (`Debug`/`Release`):
 The CMake build emits `install()` / `find_package(umbra)` / export rules, so
 WM_UMBRA drops in as a vcpkg port (`umbra::umbra`) with no public-registry wait.
 The repo is its own **git registry**, so you can consume it straight from the
-URL — in `vcpkg-configuration.json`:
+URL. Drop this into `vcpkg-configuration.json` — the `baseline` is the WM_UMBRA
+`main` commit that ships v1.1.0; bump it (`git ls-remote
+https://github.com/martona/WM_UMBRA.git main`) to pick up later releases:
 
 ```json
-{ "registries": [ {
-    "kind": "git",
-    "repository": "https://github.com/martona/WM_UMBRA",
-    "baseline": "<latest main commit>",
-    "packages": [ "umbra" ]
-} ] }
+{
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://github.com/martona/WM_UMBRA",
+      "baseline": "9fce6ad321349cfb7715a64faf0aa91060dfe7ed",
+      "packages": [ "umbra" ]
+    }
+  ]
+}
 ```
 
-then add `"umbra"` to your `vcpkg.json`. Prefer a local checkout? Point
-`--overlay-ports` at [`vcpkg-overlay/`](vcpkg-overlay) instead.
+Then add `"umbra"` to your `vcpkg.json` `dependencies` (which needs a
+`builtin-baseline`, or add a `default-registry` to the config above — the full
+example is in [`vcpkg-overlay/README.md`](vcpkg-overlay/README.md)). Prefer a
+local checkout? Point `--overlay-ports` at [`vcpkg-overlay/`](vcpkg-overlay).
 
 ```cmake
 find_package(umbra CONFIG REQUIRED)

@@ -3,7 +3,7 @@
 .SYNOPSIS
     Bump the WM_UMBRA version everywhere it lives, refresh the vcpkg portfile's
     source SHA512 from the pushed tag, and register the release in the vcpkg
-    versions database.
+    versions database (repointing the documented registry baseline to match).
 
 .DESCRIPTION
     The version is kept in three places:
@@ -27,7 +27,9 @@
 
 .PARAMETER AddVersion
     Phase 3: register the (already-committed) port in versions/ via
-    'vcpkg x-add-version'. Run after committing the portfile SHA512 update.
+    'vcpkg x-add-version' and COMMIT it, then repoint the WM_UMBRA registry
+    baseline in README.md and vcpkg-overlay/README.md at that commit and COMMIT
+    that too. Run after committing the portfile SHA512 update; then 'git push'.
 
 .EXAMPLE
     # Phase 1 - bump sources, tag & push
@@ -40,9 +42,8 @@
     .\bump_version.ps1 1.2.0 -UpdateHash
     git commit -am "vcpkg: SHA512 for v1.2.0"
 
-    # Phase 3 - register in the versions DB (after the portfile is committed)
+    # Phase 3 - register + repoint the registry baseline (commits for you)
     .\bump_version.ps1 1.2.0 -AddVersion
-    git commit -am "vcpkg: register umbra 1.2.0"
     git push origin main
 #>
 [CmdletBinding()]
@@ -93,7 +94,7 @@ function Get-Vcpkg {
 }
 
 if ($AddVersion) {
-    # ---- Phase 3: register the committed port in the versions database ----
+    # ---- Phase 3: register in versions/, repoint README baselines, commit ----
     $vcpkg = Get-Vcpkg
     Write-Host "Registering umbra $Version in versions/ (vcpkg x-add-version)" -ForegroundColor Cyan
     & $vcpkg x-add-version umbra `
@@ -102,9 +103,26 @@ if ($AddVersion) {
     if ($LASTEXITCODE -ne 0) {
         throw "x-add-version failed - is vcpkg-overlay/umbra committed with a clean working tree?"
     }
+
+    # Commit the registration so the docs can point a baseline at it.
+    git -C $root add versions
+    git -C $root commit -m "vcpkg: register umbra $Version" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "git commit (versions) failed - nothing to register?" }
+    $sha = (git -C $root rev-parse HEAD).Trim()
+
+    # Repoint the WM_UMBRA registry baseline in both READMEs at that commit.
+    foreach ($doc in @('README.md', 'vcpkg-overlay/README.md')) {
+        Edit-File $doc {
+            param($t)
+            $t -creplace '(github\.com/martona/WM_UMBRA"\s*,\s*"baseline":\s*")[0-9a-fA-F]{7,40}', "`${1}$sha"
+        }
+    }
+    git -C $root add README.md 'vcpkg-overlay/README.md'
+    git -C $root commit -m "docs: vcpkg registry baseline -> $Version" | Out-Null
+
     Write-Host ""
+    Write-Host "Registered umbra $Version; README baselines -> $sha" -ForegroundColor Green
     Write-Host "Next:" -ForegroundColor Cyan
-    Write-Host "  git commit -am `"vcpkg: register umbra $Version`""
     Write-Host "  git push origin main"
 }
 elseif ($UpdateHash) {
@@ -131,7 +149,7 @@ elseif ($UpdateHash) {
     Write-Host ""
     Write-Host "Next:" -ForegroundColor Cyan
     Write-Host "  git commit -am `"vcpkg: SHA512 for v$Version`""
-    Write-Host "  .\bump_version.ps1 $Version -AddVersion    # then register in the versions DB"
+    Write-Host "  .\bump_version.ps1 $Version -AddVersion    # register + repoint docs, then push"
 }
 else {
     # ---- Phase 1: bump the version everywhere ----
