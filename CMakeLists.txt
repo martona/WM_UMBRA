@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(umbra
-    VERSION 1.1.0
+    VERSION 1.1.1
     DESCRIPTION "WM_UMBRA - native dark mode for classic Win32 applications"
     HOMEPAGE_URL "https://github.com/martona/WM_UMBRA"
     LANGUAGES CXX RC)
@@ -25,6 +25,13 @@ add_library(umbra STATIC
 add_library(umbra::umbra ALIAS umbra)
 
 target_compile_features(umbra PUBLIC cxx_std_20)
+
+# GNUInstallDirs defines CMAKE_INSTALL_INCLUDEDIR, which the $<INSTALL_INTERFACE>
+# expression below bakes into the exported target. It MUST be included before
+# this call: when it was included later (in the install block) the expression
+# expanded to empty, so find_package(umbra) advertised no include directory and
+# consumers could link but not resolve <umbra.h>.
+include(GNUInstallDirs)
 
 target_include_directories(umbra PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -60,7 +67,8 @@ endif()
 # Install / export: makes find_package(umbra) work and keeps vcpkg happy.
 # ---------------------------------------------------------------------------
 if(UMBRA_INSTALL)
-    include(GNUInstallDirs)
+    # GNUInstallDirs is included near the top (it must precede the umbra
+    # target_include_directories() above).
     include(CMakePackageConfigHelpers)
 
     install(TARGETS umbra EXPORT umbraTargets

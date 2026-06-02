@@ -1,6 +1,6 @@
 {
   "name": "umbra",
-  "version-semver": "1.1.0",
+  "version-semver": "1.1.1",
   "description": "WM_UMBRA - native dark mode for classic Win32 / Common Controls applications (the umbra static library).",
   "homepage": "https://github.com/martona/WM_UMBRA",
   "license": "MIT AND BSD-3-Clause",
