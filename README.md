@@ -98,8 +98,27 @@ CRT}`, each multi-config (`Debug`/`Release`):
 > application — `/MT(d)` with a static-CRT app, `/MD(d)` with a dynamic-CRT app —
 > or the linker will complain.
 
-The CMake build also provides `install()`/`find_package(umbra)` rules, so it
-works as a vcpkg port and via `umbra::umbra`.
+### vcpkg
+
+The CMake build emits `install()` / `find_package(umbra)` / export rules, so
+WM_UMBRA drops in as a vcpkg port (`umbra::umbra`). A ready-to-use **overlay
+port** ships in [`vcpkg-overlay/`](vcpkg-overlay), so you can install `umbra`
+today without waiting on the public registry — just point vcpkg at the overlay:
+
+```powershell
+# Manifest mode: add to vcpkg-configuration.json
+#   { "overlay-ports": [ "path/to/WM_UMBRA/vcpkg-overlay" ] }
+# and list "umbra" in your vcpkg.json. Or classic mode:
+vcpkg install umbra --overlay-ports=path/to/WM_UMBRA/vcpkg-overlay
+```
+
+```cmake
+find_package(umbra CONFIG REQUIRED)
+target_link_libraries(your_app PRIVATE umbra::umbra)
+```
+
+`umbra` is a static library; its CRT model follows your triplet. See
+[`vcpkg-overlay/README.md`](vcpkg-overlay/README.md) for the full setup.
 
 ## License
 

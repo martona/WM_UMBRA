@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(umbra
-    VERSION 1.0.1
+    VERSION 1.1.0
     DESCRIPTION "WM_UMBRA - native dark mode for classic Win32 applications"
     HOMEPAGE_URL "https://github.com/martona/WM_UMBRA"
     LANGUAGES CXX RC)
