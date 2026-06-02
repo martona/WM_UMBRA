@@ -100,6 +100,7 @@
 
   <!-- Include Source files -->
   <ItemGroup>
+    <ClCompile Include="../src/DarkMessageBox.cpp" />
     <ClCompile Include="../src/DarkMode.cpp" />
     <ClCompile Include="../src/DMSubclass.cpp" />
     <ClCompile Include="../src/SysColorHook.cpp" />
