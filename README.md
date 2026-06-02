@@ -101,16 +101,21 @@ CRT}`, each multi-config (`Debug`/`Release`):
 ### vcpkg
 
 The CMake build emits `install()` / `find_package(umbra)` / export rules, so
-WM_UMBRA drops in as a vcpkg port (`umbra::umbra`). A ready-to-use **overlay
-port** ships in [`vcpkg-overlay/`](vcpkg-overlay), so you can install `umbra`
-today without waiting on the public registry — just point vcpkg at the overlay:
+WM_UMBRA drops in as a vcpkg port (`umbra::umbra`) with no public-registry wait.
+The repo is its own **git registry**, so you can consume it straight from the
+URL — in `vcpkg-configuration.json`:
 
-```powershell
-# Manifest mode: add to vcpkg-configuration.json
-#   { "overlay-ports": [ "path/to/WM_UMBRA/vcpkg-overlay" ] }
-# and list "umbra" in your vcpkg.json. Or classic mode:
-vcpkg install umbra --overlay-ports=path/to/WM_UMBRA/vcpkg-overlay
+```json
+{ "registries": [ {
+    "kind": "git",
+    "repository": "https://github.com/martona/WM_UMBRA",
+    "baseline": "<latest main commit>",
+    "packages": [ "umbra" ]
+} ] }
 ```
+
+then add `"umbra"` to your `vcpkg.json`. Prefer a local checkout? Point
+`--overlay-ports` at [`vcpkg-overlay/`](vcpkg-overlay) instead.
 
 ```cmake
 find_package(umbra CONFIG REQUIRED)
