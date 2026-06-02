@@ -1,0 +1,57 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// Menu
+IDM_MAIN MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "E&xit",               IDM_FILE_EXIT
+    END
+    POPUP "&Mode"
+    BEGIN
+        MENUITEM "Follow &System",      IDM_MODE_SYSTEM
+        MENUITEM "Force &Dark",         IDM_MODE_DARK
+        MENUITEM "Force &Light",        IDM_MODE_LIGHT
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About WM_UMBRA",     IDM_HELP_ABOUT
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Main window (a dialog, so the control layout stays declarative).
+// The top ~14 DLU are left clear for the toolbar; the bottom ~12 DLU for the
+// status bar. Both are created programmatically in WM_INITDIALOG.
+IDD_MAIN DIALOGEX 0, 0, 326, 250
+STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_CAPTION | WS_SYSMENU | WS_VISIBLE | WS_OVERLAPPED
+CAPTION "WM_UMBRA - Win32 Dark Mode Sample"
+MENU IDM_MAIN
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Controls", IDC_GROUP, 7, 18, 156, 156
+    PUSHBUTTON      "&Push Button", IDC_BTN, 14, 32, 64, 14
+    PUSHBUTTON      "Dark &MessageBox", IDC_BTN_MSGBOX, 88, 32, 68, 14
+    AUTOCHECKBOX    "Check &one", IDC_CHK1, 14, 52, 64, 10
+    AUTOCHECKBOX    "Check &two", IDC_CHK2, 88, 52, 64, 10
+    AUTORADIOBUTTON "Radio &A", IDC_RAD1, 14, 66, 64, 10, WS_GROUP
+    AUTORADIOBUTTON "Radio &B", IDC_RAD2, 88, 66, 64, 10
+    LTEXT           "Single-line edit:", -1, 14, 82, 142, 8
+    EDITTEXT        IDC_EDIT, 14, 92, 142, 12, ES_AUTOHSCROLL
+    LTEXT           "Combo box:", -1, 14, 108, 142, 8
+    COMBOBOX        IDC_COMBO, 14, 118, 142, 80, CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL
+    LTEXT           "Multi-line edit:", -1, 14, 134, 142, 8
+    EDITTEXT        IDC_EDIT_MULTI, 14, 144, 142, 24, ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL
+
+    CONTROL         "", IDC_LIST, "SysListView32", LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP, 169, 18, 150, 66
+    CONTROL         "", IDC_TREE, "SysTreeView32", TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_BORDER | WS_TABSTOP, 169, 88, 150, 56
+    LTEXT           "Progress + Trackbar:", -1, 169, 148, 150, 8
+    CONTROL         "", IDC_PROGRESS, "msctls_progress32", PBS_SMOOTH | WS_BORDER, 169, 158, 150, 10
+    CONTROL         "", IDC_TRACK, "msctls_trackbar32", TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 169, 170, 150, 18
+
+    LTEXT           "WM_UMBRA follows the Windows app theme automatically. Flip it in Settings > Personalization > Colors, or use the Mode menu.", IDC_INFO, 7, 180, 312, 18
+    CONTROL         "Project home: <A HREF=""https://github.com/martona/WM_UMBRA"">github.com/martona/WM_UMBRA</A>", IDC_SYSLINK, "SysLink", WS_TABSTOP, 7, 200, 312, 10
+END

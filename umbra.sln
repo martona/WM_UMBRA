@@ -5,6 +5,8 @@ VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{D73E2E2D-A26A-4DB3-B9F0-365244304AD1}") = "umbra", "./project/umbra.vcxproj", "{40E6196F-E54E-4BFF-8A94-449BB8E2E34F}"
 EndProject
+Project("{D73E2E2D-A26A-4DB3-B9F0-365244304AD1}") = "umbra-sample", "./sample/umbra-sample.vcxproj", "{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -27,6 +29,18 @@ Global
 		{40E6196F-E54E-4BFF-8A94-449BB8E2E34F}.Release|Win32.Build.0 = Release|Win32
 		{40E6196F-E54E-4BFF-8A94-449BB8E2E34F}.Release|x64.ActiveCfg = Release|x64
 		{40E6196F-E54E-4BFF-8A94-449BB8E2E34F}.Release|x64.Build.0 = Release|x64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|ARM64.Build.0 = Debug|ARM64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|Win32.Build.0 = Debug|Win32
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|x64.ActiveCfg = Debug|x64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Debug|x64.Build.0 = Debug|x64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|ARM64.ActiveCfg = Release|ARM64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|ARM64.Build.0 = Release|ARM64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|Win32.ActiveCfg = Release|Win32
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|Win32.Build.0 = Release|Win32
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|x64.ActiveCfg = Release|x64
+		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
