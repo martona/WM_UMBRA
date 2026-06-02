@@ -72,7 +72,9 @@ msbuild umbra.sln /m /p:Configuration=Release /p:Platform=x64
 ```
 
 Configurations are `Debug`/`Release`; platforms are `Win32`, `x64`, and `ARM64`.
-The solution builds the `umbra` static library and the `umbra-sample` app.
+Add `/p:UmbraCRT=DLL` for the dynamic-CRT (`/MD`) build; the default is the
+static CRT (`/MT`). The solution builds the `umbra` static library and the
+`umbra-sample` app.
 
 **CMake (with presets)**
 
