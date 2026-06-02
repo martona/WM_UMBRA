@@ -22,7 +22,7 @@
     <ClInclude Include="../include/DarkMode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="../include/DMSubclass.h">
+    <ClInclude Include="../include/umbra.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="../include/IatHook.h">
@@ -53,7 +53,7 @@
     <ClCompile Include="../src/DarkMode.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="../src/DMSubclass.cpp">
+    <ClCompile Include="../src/umbra.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="../src/SysColorHook.cpp">

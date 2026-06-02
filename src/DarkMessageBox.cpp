@@ -26,7 +26,7 @@
 #include <cwchar>
 #include <cstdlib>    // _countof — windows.h is trimmed here by VC_EXTRALEAN
 #include <commctrl.h>
-#include "DMSubclass.h"
+#include "umbra.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -36,8 +36,8 @@ namespace
 
     bool MessageBoxShouldBeDark()
     {
-        return DarkMode::isEnabled() &&
-            DarkMode::isColorDark(DarkMode::getDlgBackgroundColor());
+        return umbra::isEnabled() &&
+            umbra::isColorDark(umbra::getDlgBackgroundColor());
     }
 
     struct ExcludeChildrenCtx
@@ -94,7 +94,7 @@ namespace
                 reinterpret_cast<LPARAM>(&ctx));
         }
 
-        ::FillRect(hdc, &rcClient, DarkMode::getDlgBackgroundBrush());
+        ::FillRect(hdc, &rcClient, umbra::getDlgBackgroundBrush());
 
         if (saved != 0)
             ::RestoreDC(hdc, saved);
@@ -130,7 +130,7 @@ namespace
         case WM_CTLCOLORMSGBOX:
         case WM_CTLCOLORDLG:
             if (MessageBoxShouldBeDark())
-                return DarkMode::onCtlColorDlg(reinterpret_cast<HDC>(wp));
+                return umbra::onCtlColorDlg(reinterpret_cast<HDC>(wp));
             break;
 
         case WM_CTLCOLORSTATIC:
@@ -138,7 +138,7 @@ namespace
             {
                 HWND hwndChild = reinterpret_cast<HWND>(lp);
 
-                return DarkMode::onCtlColorDlgStaticText(
+                return umbra::onCtlColorDlgStaticText(
                     reinterpret_cast<HDC>(wp),
                     ::IsWindowEnabled(hwndChild) == TRUE);
             }
@@ -188,7 +188,7 @@ namespace
 
     bool AppWantsDarkMessageBox()
     {
-        return DarkMode::isEnabled();
+        return umbra::isEnabled();
     }
 
     void DarkenMessageBoxWindow(HWND hwnd)
@@ -198,11 +198,11 @@ namespace
 
         g_msgBoxDarkened = true;
 
-        DarkMode::setWindowEraseBgSubclass(hwnd);
-        DarkMode::setDarkWndNotifySafe(hwnd, true);
+        umbra::setWindowEraseBgSubclass(hwnd);
+        umbra::setDarkWndNotifySafe(hwnd, true);
 
         // Disable any themed dialog texture nonsense.
-        DarkMode::enableThemeDialogTexture(hwnd, false);
+        umbra::enableThemeDialogTexture(hwnd, false);
 
         // Must be installed after the darkmode32plus subclasses.
         // This lets our WM_PAINT call DefSubclassProc() first, then backfill.
@@ -263,7 +263,7 @@ namespace
     };
 }
 
-namespace DarkMode
+namespace umbra
 {
     int DarkMessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type)
     {
