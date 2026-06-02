@@ -204,7 +204,7 @@ namespace
         // Disable any themed dialog texture nonsense.
         umbra::enableThemeDialogTexture(hwnd, false);
 
-        // Must be installed after the darkmode32plus subclasses.
+        // Must be installed after the umbra subclasses.
         // This lets our WM_PAINT call DefSubclassProc() first, then backfill.
         InstallMessageBoxBackfillSubclass(hwnd);
 
