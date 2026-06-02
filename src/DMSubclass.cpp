@@ -146,109 +146,6 @@ static bool CmpWndClassName(HWND hWnd, const wchar_t* classNameToCmp)
 	return (GetWndClassName(hWnd) == classNameToCmp);
 }
 
-#if !defined(_DARKMODE_NO_INI_CONFIG)
-/**
- * @brief Constructs a full path to an `.ini` file located next to the executable.
- *
- * Retrieves the directory of the current module (executable or DLL) and appends
- * the specified `.ini` filename to it.
- *
- * @param iniFilename The base name of the `.ini` file (without path or extension).
- * @return Full path to the `.ini` file as a wide string, or an empty string on failure.
- *
- * @note Returns a path like: `C:\\Path\\To\\Executable\\YourFile.ini`
- */
-static std::wstring GetIniPath(const std::wstring& iniFilename)
-{
-	std::array<wchar_t, MAX_PATH> buffer{};
-	const auto strLen = static_cast<size_t>(::GetModuleFileNameW(nullptr, buffer.data(), MAX_PATH));
-	if (strLen == 0)
-	{
-		return L"";
-	}
-
-	wchar_t* lastSlash = std::wcsrchr(buffer.data(), L'\\');
-	if (lastSlash == nullptr)
-	{
-		return L"";
-	}
-
-	*lastSlash = L'\0';
-	std::wstring iniPath(buffer.data());
-	iniPath += L"\\" + iniFilename + L".ini";
-	return iniPath;
-}
-
-/**
- * @brief Checks whether a file exists at the specified path.
- *
- * Determines if the given file path exists and refers to a regular file.
- *
- * @param filePath Path to the file to check.
- * @return `true` if the file exists and is not a directory, otherwise `false`.
- */
-static bool FileExists(const std::wstring& filePath)
-{
-	const DWORD dwAttrib = ::GetFileAttributesW(filePath.c_str());
-	return (dwAttrib != INVALID_FILE_ATTRIBUTES && ((dwAttrib & FILE_ATTRIBUTE_DIRECTORY) != FILE_ATTRIBUTE_DIRECTORY));
-}
-
-/**
- * @brief Reads a color value from an `.ini` file and converts it to a `COLORREF`.
- *
- * Reads a 6-digit hex color string from the specified section and key, then parses
- * it as a Windows GDI `COLORREF` value.
- *
- * @param sectionName Section within the `.ini` file.
- * @param keyName Key name containing the hex RGB value (e.g., "E0E2E4").
- * @param iniFilePath Full path to the `.ini` file.
- * @param clr Pointer to a `COLORREF` where the parsed color will be stored. **Must not be `nullptr`.**
- * @return `true` if a valid 6-digit hex color was read and parsed, otherwise `false`.
- *
- * @note The value must be exactly 6 hexadecimal digits and represent an RGB color.
- */
-static bool SetClrFromIni(const std::wstring& sectionName, const std::wstring& keyName, const std::wstring& iniFilePath, COLORREF* clr)
-{
-	static constexpr size_t maxStrLen = 6;
-	std::wstring buffer(maxStrLen + 1, L'\0');
-
-	const auto len = static_cast<size_t>(::GetPrivateProfileStringW(
-		sectionName.c_str()
-		, keyName.c_str()
-		, L""
-		, buffer.data()
-		, static_cast<DWORD>(buffer.size())
-		, iniFilePath.c_str()));
-
-	if (len != maxStrLen)
-	{
-		return false;
-	}
-
-	buffer.resize(len); // remove extra '\0'
-
-	for (const auto& wch : buffer)
-	{
-		if (iswxdigit(wch) == 0)
-		{
-			return false;
-		}
-	}
-
-	try
-	{
-		static constexpr int baseHex = 16;
-		if (clr)
-			*clr = HEXRGB(std::stoul(buffer, nullptr, baseHex));
-	}
-	catch (const std::exception&)
-	{
-		return false;
-	}
-
-	return true;
-}
-#endif // !defined(_DARKMODE_NO_INI_CONFIG)
 
 namespace DarkMode
 {
@@ -297,15 +194,6 @@ namespace DarkMode
 			case LibInfo::iathookExternal:
 			{
 #if defined(_DARKMODE_EXTERNAL_IATHOOK)
-				return TRUE;
-#else
-				return FALSE;
-#endif
-			}
-
-			case LibInfo::iniConfigUsed:
-			{
-#if !defined(_DARKMODE_NO_INI_CONFIG)
 				return TRUE;
 #else
 				return FALSE;
@@ -419,11 +307,6 @@ namespace DarkMode
 			WinMode _windowsMode = WinMode::disabled;
 			bool _isInit = false;
 			bool _isInitExperimental = false;
-
-#if !defined(_DARKMODE_NO_INI_CONFIG)
-			std::wstring _iniName;
-			bool _isIniNameSet = false;
-#endif
 		} g_dmCfg;
 	}; // anonymous namespace
 
@@ -1377,120 +1260,6 @@ namespace DarkMode
 			&& DarkMode::isExperimentalSupported();
 	}
 
-#if !defined(_DARKMODE_NO_INI_CONFIG)
-	 /**
-	  * @brief Initializes dark mode configuration and colors from an INI file.
-	  *
-	  * Loads configuration values from the specified INI file path and applies them to the
-	  * current dark mode settings. This includes:
-	  * - Base appearance (`DarkModeType`) and system-following mode (`WinMode`)
-	  * - Optional Mica and rounded corner styling
-	  * - Custom colors for background, text, borders, and headers (if present)
-	  * - Tone settings for dark theme (`ColorTone`)
-	  *
-	  * If the INI file does not exist, default dark mode behavior is applied via
-	  * @ref DarkMode::setDarkModeConfig.
-	  *
-	  * @param iniName Name of INI file (resolved via @ref GetIniPath).
-	  *
-	  * @note When `DarkModeType::classic` is set, system colors are used instead of themed ones.
-	  */
-	static void initOptions(const std::wstring& iniName)
-	{
-		if (iniName.empty())
-			return;
-
-		const std::wstring iniPath = GetIniPath(iniName);
-		if (FileExists(iniPath))
-		{
-			DarkMode::initDarkModeConfig(::GetPrivateProfileIntW(L"main", L"mode", 1, iniPath.c_str()));
-			if (g_dmCfg._dmType == DarkModeType::classic)
-			{
-				DarkMode::setDarkModeConfig(static_cast<UINT>(DarkModeType::classic));
-				DarkMode::setDefaultColors(false);
-				return;
-			}
-
-			const bool useDark = g_dmCfg._dmType == DarkModeType::dark;
-
-			const std::wstring sectionBase = useDark ? L"dark" : L"light";
-			const std::wstring sectionColorsView = sectionBase + L".colors.view";
-			const std::wstring sectionColors = sectionBase + L".colors";
-
-			DarkMode::setMicaConfig(::GetPrivateProfileIntW(sectionBase.c_str(), L"mica", 0, iniPath.c_str()));
-			DarkMode::setRoundCornerConfig(::GetPrivateProfileIntW(sectionBase.c_str(), L"roundCorner", 0, iniPath.c_str()));
-			SetClrFromIni(sectionBase, L"borderColor", iniPath, &g_dmCfg._borderColor);
-			if (g_dmCfg._borderColor == kDwmwaClrDefaultRGBCheck)
-			{
-				g_dmCfg._borderColor = DWMWA_COLOR_DEFAULT;
-			}
-
-			if (useDark)
-			{
-				UINT tone = ::GetPrivateProfileIntW(sectionBase.c_str(), L"tone", 0, iniPath.c_str());
-				if (tone >= static_cast<UINT>(ColorTone::max))
-				{
-					tone = 0;
-				}
-
-				DarkMode::getTheme().setToneColors(static_cast<ColorTone>(tone));
-				DarkMode::getThemeView()._clrView = DarkMode::darkColorsView;
-				DarkMode::getThemeView()._clrView.headerBackground = DarkMode::getTheme()._colors.background;
-				DarkMode::getThemeView()._clrView.headerHotBackground = DarkMode::getTheme()._colors.hotBackground;
-				DarkMode::getThemeView()._clrView.headerText = DarkMode::getTheme()._colors.darkerText;
-
-				if (!DarkMode::isWindowsModeEnabled())
-				{
-					g_dmCfg._micaExtend = (::GetPrivateProfileIntW(sectionBase.c_str(), L"micaExtend", 0, iniPath.c_str()) == 1);
-				}
-			}
-			else
-			{
-				DarkMode::getTheme()._colors = DarkMode::getLightColors();
-				DarkMode::getThemeView()._clrView = DarkMode::lightColorsView;
-			}
-
-			SetClrFromIni(sectionColorsView, L"backgroundView", iniPath, &DarkMode::getThemeView()._clrView.background);
-			SetClrFromIni(sectionColorsView, L"textView", iniPath, &DarkMode::getThemeView()._clrView.text);
-			SetClrFromIni(sectionColorsView, L"gridlines", iniPath, &DarkMode::getThemeView()._clrView.gridlines);
-			SetClrFromIni(sectionColorsView, L"backgroundHeader", iniPath, &DarkMode::getThemeView()._clrView.headerBackground);
-			SetClrFromIni(sectionColorsView, L"backgroundHotHeader", iniPath, &DarkMode::getThemeView()._clrView.headerHotBackground);
-			SetClrFromIni(sectionColorsView, L"textHeader", iniPath, &DarkMode::getThemeView()._clrView.headerText);
-			SetClrFromIni(sectionColorsView, L"edgeHeader", iniPath, &DarkMode::getThemeView()._clrView.headerEdge);
-
-			SetClrFromIni(sectionColors, L"background", iniPath, &DarkMode::getTheme()._colors.background);
-			SetClrFromIni(sectionColors, L"backgroundCtrl", iniPath, &DarkMode::getTheme()._colors.ctrlBackground);
-			SetClrFromIni(sectionColors, L"backgroundHot", iniPath, &DarkMode::getTheme()._colors.hotBackground);
-			SetClrFromIni(sectionColors, L"backgroundDlg", iniPath, &DarkMode::getTheme()._colors.dlgBackground);
-			SetClrFromIni(sectionColors, L"backgroundError", iniPath, &DarkMode::getTheme()._colors.errorBackground);
-
-			SetClrFromIni(sectionColors, L"text", iniPath, &DarkMode::getTheme()._colors.text);
-			SetClrFromIni(sectionColors, L"textItem", iniPath, &DarkMode::getTheme()._colors.darkerText);
-			SetClrFromIni(sectionColors, L"textDisabled", iniPath, &DarkMode::getTheme()._colors.disabledText);
-			SetClrFromIni(sectionColors, L"textLink", iniPath, &DarkMode::getTheme()._colors.linkText);
-
-			SetClrFromIni(sectionColors, L"edge", iniPath, &DarkMode::getTheme()._colors.edge);
-			SetClrFromIni(sectionColors, L"edgeHot", iniPath, &DarkMode::getTheme()._colors.hotEdge);
-			SetClrFromIni(sectionColors, L"edgeDisabled", iniPath, &DarkMode::getTheme()._colors.disabledEdge);
-
-			DarkMode::updateThemeBrushesAndPens();
-			DarkMode::updateViewBrushesAndPens();
-			DarkMode::calculateTreeViewStyle();
-
-			if (!g_dmCfg._micaExtend)
-			{
-				g_dmCfg._colorizeTitleBar = (::GetPrivateProfileIntW(sectionBase.c_str(), L"colorizeTitleBar", 0, iniPath.c_str()) == 1);
-			}
-
-			DarkMode::setDarkMode(g_dmCfg._dmType == DarkModeType::dark, true);
-		}
-		else
-		{
-			DarkMode::setDarkModeConfig(static_cast<UINT>(DarkModeType::dark));
-			DarkMode::setDefaultColors(true);
-		}
-	}
-#endif // !defined(_DARKMODE_NO_INI_CONFIG)
 
 	/**
 	 * @brief Applies dark mode settings based on the given configuration type.
@@ -1532,24 +1301,22 @@ namespace DarkMode
 	}
 
 	/**
-	 * @brief Initializes dark mode experimental features, colors, and other settings.
+	 * @brief Initializes dark mode experimental features, colors, and system colors.
 	 *
 	 * Performs one-time setup for dark mode, including:
 	 * - Initializing experimental features if not yet done.
-	 * - Optionally loading settings from an INI file (if INI config is enabled).
+	 * - Applying the appearance that follows the current system light/dark setting.
 	 * - Initializing TreeView style and applying dark mode settings.
 	 * - Preparing system colors (e.g. `COLOR_WINDOW`, `COLOR_WINDOWTEXT`, `COLOR_BTNFACE`)
 	 *   for hooking.
 	 *
-	 * @param iniName Optional path to an INI file for dark mode settings (ignored if already set).
-	 *
 	 * @note This function is only run once per session;
 	 *       subsequent calls have no effect, unless follow system mode is used,
-	 *       then only colors are updated each time system changes mode.
+	 *       then only colors are updated each time the system changes mode.
 	 *
 	 * @see DarkMode::calculateTreeViewStyle()
 	 */
-	void initDarkMode([[maybe_unused]] const wchar_t* iniName)
+	void initDarkMode()
 	{
 		if (!g_dmCfg._isInit)
 		{
@@ -1559,23 +1326,8 @@ namespace DarkMode
 				g_dmCfg._isInitExperimental = true;
 			}
 
-#if !defined(_DARKMODE_NO_INI_CONFIG)
-			if (!g_dmCfg._isIniNameSet)
-			{
-				g_dmCfg._iniName = iniName;
-				g_dmCfg._isIniNameSet = true;
-
-				if (g_dmCfg._iniName.empty())
-				{
-					DarkMode::setDarkModeConfig(static_cast<UINT>(DarkModeType::dark));
-					DarkMode::setDefaultColors(true);
-				}
-			}
-			DarkMode::initOptions(g_dmCfg._iniName);
-#else
 			DarkMode::setDarkModeConfig();
 			DarkMode::setDefaultColors(true);
-#endif
 
 			DarkMode::setSysColor(COLOR_WINDOW, DarkMode::getBackgroundColor());
 			DarkMode::setSysColor(COLOR_WINDOWTEXT, DarkMode::getTextColor());
@@ -1583,16 +1335,6 @@ namespace DarkMode
 
 			g_dmCfg._isInit = true;
 		}
-	}
-
-	/**
-	 * @brief Initializes dark mode without INI settings.
-	 *
-	 * Forwards to @ref DarkMode::initDarkMode with an empty INI path, effectively disabling INI settings.
-	 */
-	void initDarkMode()
-	{
-		DarkMode::initDarkMode(L"");
 	}
 
 	/**

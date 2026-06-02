@@ -158,7 +158,6 @@ namespace DarkMode
 		verMinor,         ///< Minor version number of the library.
 		verRevision,      ///< Revision/patch number of the library.
 		iathookExternal,  ///< Indicates if external IAT hooking is used.
-		iniConfigUsed,    ///< True if `.ini` file configuration is supported.
 		allowOldOS,       ///< True if older Windows versions are allowed.
 		useDlgProcCtl,    ///< True if WM_CTLCOLORxxx can be handled directly in dialog procedure.
 		preferTheme,      ///< True if theme is supported and can be used over subclass, e.g. combo box on Windows 10+.
@@ -233,10 +232,7 @@ namespace DarkMode
 	/// Applies dark mode settings based on system mode preference.
 	void setDarkModeConfig();
 
-	/// Initializes dark mode experimental features, colors, and other settings.
-	void initDarkMode(const wchar_t* iniName);
-
-	///Initializes dark mode without INI settings.
+	/// Initializes dark mode: experimental features, colors, and system colors (follows the system light/dark setting).
 	void initDarkMode();
 
 	// ========================================================================
