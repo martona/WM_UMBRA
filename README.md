@@ -113,7 +113,7 @@ https://github.com/martona/WM_UMBRA.git main`) to pick up later releases:
     {
       "kind": "git",
       "repository": "https://github.com/martona/WM_UMBRA",
-      "baseline": "9fce6ad321349cfb7715a64faf0aa91060dfe7ed",
+      "baseline": "e87d7a27e70da5d9e144622bc27c3c0a85336e36",
       "packages": [ "umbra" ]
     }
   ]
