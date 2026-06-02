@@ -6,7 +6,7 @@
  * This project is based on and includes modified code from:
  * project 'win32-darkmode' by ysc3839 (MIT License),
  * available at: https://github.com/ysc3839/win32-darkmode
- * and project 'darkmodelib' by ozone10 (MPL-2.0 License),
+ * and project 'darkmodelib' by ozone10 (MPL-2.0 or MIT License),
  * available at: https://github.com/ozone10/darkmodelib
  *
  * The respective original licenses apply to portions of this code.
@@ -60,7 +60,7 @@
 #pragma comment(lib, "Gdi32.lib")
 #endif
 
-namespace DarkMode
+namespace umbra
 {
 	struct Colors
 	{
@@ -132,9 +132,9 @@ namespace DarkMode
 	 * - `light`: Light mode appearance.
 	 * - `dark`: Dark mode appearance.
 	 *
-	 * Set via configuration and used by style evaluators (e.g. @ref DarkMode::calculateTreeViewStyle).
+	 * Set via configuration and used by style evaluators (e.g. @ref umbra::calculateTreeViewStyle).
 	 *
-	 * @see DarkMode::calculateTreeViewStyle()
+	 * @see umbra::calculateTreeViewStyle()
 	 */
 	enum class TreeViewStyle : unsigned char
 	{
@@ -146,10 +146,10 @@ namespace DarkMode
 	/**
 	 * @brief Describes metadata fields and compile-time features of the dark mode library.
 	 *
-	 * Values of this enum are used with @ref DarkMode::getLibInfo to retrieve version numbers and
+	 * Values of this enum are used with @ref umbra::getLibInfo to retrieve version numbers and
 	 * determine whether specific features were enabled during compilation.
 	 *
-	 * @see DarkMode::getLibInfo()
+	 * @see umbra::getLibInfo()
 	 */
 	enum class LibInfo : unsigned char
 	{
@@ -158,7 +158,6 @@ namespace DarkMode
 		verMinor,         ///< Minor version number of the library.
 		verRevision,      ///< Revision/patch number of the library.
 		iathookExternal,  ///< Indicates if external IAT hooking is used.
-		iniConfigUsed,    ///< True if `.ini` file configuration is supported.
 		allowOldOS,       ///< True if older Windows versions are allowed.
 		useDlgProcCtl,    ///< True if WM_CTLCOLORxxx can be handled directly in dialog procedure.
 		preferTheme,      ///< True if theme is supported and can be used over subclass, e.g. combo box on Windows 10+.
@@ -168,13 +167,13 @@ namespace DarkMode
 	/**
 	 * @brief Defines the available dark mode types for manual configurations.
 	 *
-	 * Can be used in DarkMode::initDarkModeConfig and in DarkMode::setDarkModeConfig
+	 * Can be used in umbra::initDarkModeConfig and in umbra::setDarkModeConfig
 	 * with static_cast<UINT>(DarkModeType::'value').
 	 *
 	 * @note Also used internally to distinguish between light, dark, and classic modes.
 	 *
-	 * @see DarkMode::initDarkModeConfig()
-	 * @see DarkMode::setDarkModeConfig()
+	 * @see umbra::initDarkModeConfig()
+	 * @see umbra::setDarkModeConfig()
 	 */
 	enum class DarkModeType : unsigned char
 	{
@@ -233,10 +232,7 @@ namespace DarkMode
 	/// Applies dark mode settings based on system mode preference.
 	void setDarkModeConfig();
 
-	/// Initializes dark mode experimental features, colors, and other settings.
-	void initDarkMode(const wchar_t* iniName);
-
-	///Initializes dark mode without INI settings.
+	/// Initializes dark mode: experimental features, colors, and system colors (follows the system light/dark setting).
 	void initDarkMode();
 
 	// ========================================================================
@@ -588,6 +584,11 @@ namespace DarkMode
 	[[nodiscard]] LRESULT onCtlColorListbox(WPARAM wParam, LPARAM lParam);
 
 	// ========================================================================
+	// Darkmode-aware MessageBox
+	// ========================================================================
+	int DarkMessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type);
+
+	// ========================================================================
 	// Hook Callback Dialog Procedure
 	// ========================================================================
 
@@ -668,7 +669,7 @@ namespace DarkMode
 	 *
 	 * CHOOSEFONT cf{};
 	 * cf.Flags |= CF_ENABLEHOOK | CF_ENABLETEMPLATE;
-	 * cf.lpfnHook = static_cast<LPCFHOOKPROC>(DarkMode::HookDlgProc);
+	 * cf.lpfnHook = static_cast<LPCFHOOKPROC>(umbra::HookDlgProc);
 	 * cf.hInstance = GetModuleHandle(nullptr);
 	 * cf.lpTemplateName = MAKEINTRESOURCE(IDD_DARK_FONT_DIALOG);
 	 * ```
@@ -680,7 +681,7 @@ namespace DarkMode
 	 * @return A value defined by the hook procedure.
 	 */
 	UINT_PTR CALLBACK HookDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-} // namespace DarkMode
+} // namespace umbra
 
 #else
 #define _DARKMODE_NOT_USED

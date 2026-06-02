@@ -6,7 +6,7 @@
  * This project is based on and includes modified code from:
  * project 'win32-darkmode' by ysc3839 (MIT License),
  * available at: https://github.com/ysc3839/win32-darkmode
- * and project 'darkmodelib' by ozone10 (MPL-2.0 License),
+ * and project 'darkmodelib' by ozone10 (MPL-2.0 or MIT License),
  * available at: https://github.com/ozone10/darkmodelib
  *
  * The respective original licenses apply to portions of this code.
@@ -276,6 +276,8 @@ void DarkModeHelper::InitDarkMode()
 	DWORD major = 0, minor = 0, buildNumber = 0;
 	if (!getOSVersionNumber(major, minor, buildNumber))
 		return;
+
+	g_buildNumber = buildNumber;
 
 	if (major == 10 && minor == 0 && g_buildNumber >= MinSupportVersion)
 	{

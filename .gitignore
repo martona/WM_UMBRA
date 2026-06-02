@@ -372,3 +372,6 @@ FodyWeavers.xsd
 /build/
 /log/
 /backup/
+
+# claude
+.claude/settings.local.json
