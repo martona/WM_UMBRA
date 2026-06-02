@@ -24,6 +24,7 @@
 
 #include <windows.h>
 #include <cwchar>
+#include <cstdlib>    // _countof — windows.h is trimmed here by VC_EXTRALEAN
 #include <commctrl.h>
 #include "DMSubclass.h"
 
