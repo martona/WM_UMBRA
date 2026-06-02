@@ -18,9 +18,9 @@ files marked below) is MIT.
 - Reviewed upstream baseline: commit `03ca2e956df57af4eadeec9076bb44ac596a9572` (2026-03-12)
 - Fork: Marton Anka — https://github.com/martona/WM_UMBRA
 
-Changes made in the fork: a Windows build-number initialization fix; a
-dark-mode-aware `MessageBoxW` helper; removal of the `.ini` configuration code
-(which also fixed a mis-initialization that forced dark mode on regardless of
+Changes made in the fork: a library-breaking Windows build-number initialization 
+fix; a dark-mode-aware `MessageBoxW` helper; removal of the `.ini` configuration 
+code (which also fixed a mis-initialization that forced dark mode on regardless of
 the system setting); a rename of the public namespace to `umbra` and the main
 header to `umbra.h`; a sample application; and a CMake build with presets.
 
