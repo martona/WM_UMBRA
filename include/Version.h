@@ -6,7 +6,7 @@
  * This project is based on and includes modified code from:
  * project 'win32-darkmode' by ysc3839 (MIT License),
  * available at: https://github.com/ysc3839/win32-darkmode
- * and project 'darkmodelib' by ozone10 (MPL-2.0 License),
+ * and project 'darkmodelib' by ozone10 (MPL-2.0 or MIT License),
  * available at: https://github.com/ozone10/darkmodelib
  *
  * The respective original licenses apply to portions of this code.
@@ -48,8 +48,8 @@
 
 #define DM_PROJECT_NAME							L"WM_UMBRA"
 #define DM_PRODUCT_INFO							L"Native Dark Mode Library for Win32 API Applications"
-#define DM_COMPANY_NAME							L"Stark Personal"
-#define DM_COPYRIGHT_INFO						L"Copyright (c) 2025 Anthony Lee Stark. All rights reserved."
+#define DM_COMPANY_NAME							L"Marton Anka"
+#define DM_COPYRIGHT_INFO						L"Copyright (c) 2026 Marton Anka (MIT). Portions (c) 2025 Anthony Lee Stark (BSD-3-Clause)."
 
 #define DM_VERSION_PRODUCT_NAME					DM_PRODUCT_INFO
 #define DM_VERSION_INTERNAL_NAME				L"umbra.lib"
