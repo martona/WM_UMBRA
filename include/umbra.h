@@ -156,7 +156,8 @@ namespace umbra
 		featureCheck,     ///< Returns maxValue to verify enum coverage.
 		verMajor,         ///< Major version number of the library.
 		verMinor,         ///< Minor version number of the library.
-		verRevision,      ///< Revision/patch number of the library.
+		verPatch,         ///< Patch version number of the library.
+		verRevision,      ///< Revision (build) number of the library.
 		iathookExternal,  ///< Indicates if external IAT hooking is used.
 		allowOldOS,       ///< True if older Windows versions are allowed.
 		useDlgProcCtl,    ///< True if WM_CTLCOLORxxx can be handled directly in dialog procedure.

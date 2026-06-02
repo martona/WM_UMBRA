@@ -153,7 +153,7 @@ namespace umbra
 	 * @brief Returns library version information or compile-time feature flags.
 	 *
 	 * Responds to the specified query by returning either:
-	 * - Version numbers (`verMajor`, `verMinor`, `verRevision`)
+	 * - Version numbers (`verMajor`, `verMinor`, `verPatch`, `verRevision`)
 	 * - Build configuration flags (returns `TRUE` or `FALSE`)
 	 * - A constant value (`featureCheck`, `maxValue`) used for validation
 	 *
@@ -184,6 +184,11 @@ namespace umbra
 			case LibInfo::verMinor:
 			{
 				return DM_VERSION_MINOR;
+			}
+
+			case LibInfo::verPatch:
+			{
+				return DM_VERSION_PATCH;
 			}
 
 			case LibInfo::verRevision:
