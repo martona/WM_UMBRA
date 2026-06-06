@@ -12,9 +12,11 @@ BEGIN
     END
     POPUP "&Mode"
     BEGIN
-        MENUITEM "Follow &System",      IDM_MODE_SYSTEM
-        MENUITEM "Force &Dark",         IDM_MODE_DARK
-        MENUITEM "Force &Light",        IDM_MODE_LIGHT
+        MENUITEM "Palette: Follow &System",  IDM_MODE_SYSTEM
+        MENUITEM "Palette: Force &Dark",     IDM_MODE_DARK
+        MENUITEM "Palette: Force &Light",    IDM_MODE_LIGHT
+        MENUITEM SEPARATOR
+        MENUITEM "Process-wide color &hook (Detours)", IDM_HOOK_TOGGLE
     END
     POPUP "&Help"
     BEGIN

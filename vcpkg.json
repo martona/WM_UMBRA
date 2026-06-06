@@ -1,0 +1,10 @@
+{
+  "name": "umbra-dev",
+  "version-string": "1.1.1",
+  "description": "Build-time manifest for developing WM_UMBRA in-tree. Pulls Microsoft Detours for the process-wide GetSysColor/GetSysColorBrush hook (src/ProcessColorHook.cpp). Consumers of the umbra package get Detours via the overlay port in vcpkg-overlay/umbra.",
+  "homepage": "https://github.com/martona/WM_UMBRA",
+  "dependencies": [
+    "detours"
+  ],
+  "builtin-baseline": "10ceb139a610ebf3c6aa49cdc4a4b7f3db5d3f2b"
+}

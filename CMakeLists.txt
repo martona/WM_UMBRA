@@ -21,7 +21,8 @@ add_library(umbra STATIC
     src/umbra.cpp
     src/DarkMode.cpp
     src/SysColorHook.cpp
-    src/DarkMessageBox.cpp)
+    src/DarkMessageBox.cpp
+    src/ProcessColorHook.cpp)
 add_library(umbra::umbra ALIAS umbra)
 
 target_compile_features(umbra PUBLIC cxx_std_20)
@@ -48,6 +49,18 @@ endif()
 
 # Win32 dark-mode dependencies, PUBLIC so consumers of the static lib link them.
 target_link_libraries(umbra PUBLIC comctl32 dwmapi gdi32 uxtheme)
+
+# Microsoft Detours — process-wide GetSysColor/GetSysColorBrush hook
+# (src/ProcessColorHook.cpp). The vcpkg port ships headers + a .lib but no CMake
+# config package, so locate them directly. Requires the vcpkg toolchain (set
+# VCPKG_ROOT or pass -DCMAKE_TOOLCHAIN_FILE; see CMakePresets.json).
+find_path(DETOURS_INCLUDE_DIR "detours/detours.h" REQUIRED)
+find_library(DETOURS_LIBRARY detours REQUIRED)
+target_include_directories(umbra PRIVATE "${DETOURS_INCLUDE_DIR}")
+# BUILD_INTERFACE only: in-tree builds (and the samples) link detours here, but
+# the absolute path is kept out of the installed export — downstream consumers
+# get detours via the vcpkg overlay port + the #pragma comment(lib) in the hook.
+target_link_libraries(umbra PUBLIC "$<BUILD_INTERFACE:${DETOURS_LIBRARY}>")
 
 # ---------------------------------------------------------------------------
 # Sample application (optional; on by default for a top-level build)

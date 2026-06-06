@@ -373,5 +373,8 @@ FodyWeavers.xsd
 /log/
 /backup/
 
+# vcpkg manifest-mode install tree (Detours, etc.)
+vcpkg_installed/
+
 # claude
 .claude/settings.local.json

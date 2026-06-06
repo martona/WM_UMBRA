@@ -50,6 +50,20 @@
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
 
+  <!-- umbra.lib now depends on Detours; this exe must find detours.lib at link.
+       Enable the same vcpkg manifest integration (static triplet for /MT). -->
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>true</VcpkgEnabled>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgUseStatic Condition="'$(UmbraCRT)'!='DLL'">true</VcpkgUseStatic>
+    <VcpkgUseStatic Condition="'$(UmbraCRT)'=='DLL'">false</VcpkgUseStatic>
+  </PropertyGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
   <PropertyGroup>
     <OutDir>$(SolutionDir)build\$(Configuration)\$(Platform)\</OutDir>
     <IntDir>$(OutDir)intermediate\umbra-hook\</IntDir>

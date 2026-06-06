@@ -288,6 +288,32 @@ namespace umbra
 	 */
 	void setSysColor(int nIndex, COLORREF color) noexcept;
 
+	/**
+	 * @brief Installs a process-wide inline hook (Microsoft Detours) on the
+	 *        user32 exports `GetSysColor` and `GetSysColorBrush`, returning
+	 *        UMBRA's dark palette for the colors it overrides.
+	 *
+	 * A parallel mechanism to per-window theming (`setDarkWndNotifySafe`): it
+	 * needs no subclassing and reaches callers UMBRA never sees. It only affects
+	 * code that calls the exports — user32's internal non-client painting and
+	 * uxtheme theme-part drawing are unaffected — and, being context-free (no
+	 * HWND), it is all-or-nothing per process: while installed it serves the
+	 * current palette (install/uninstall is the on/off switch).
+	 *
+	 * Returned values track the current palette (see the `get*Color()`
+	 * accessors), so initialise the palette (`initDarkMode` / `setDarkModeConfig`
+	 * / `setDefaultColors`) for meaningful results. Independent of the comctl32
+	 * IAT hook behind `setSysColor`; the two may coexist.
+	 *
+	 * @return `true` if installed (or already installed); `false` if Detours
+	 *         failed to attach.
+	 */
+	bool setProcessWideColorHook() noexcept;
+
+	/// Removes the process-wide GetSysColor/GetSysColorBrush hook installed by
+	/// `setProcessWideColorHook()` and frees its cached brushes.
+	void unsetProcessWideColorHook() noexcept;
+
 	// ========================================================================
 	// Enhancements to DarkMode.h
 	// ========================================================================

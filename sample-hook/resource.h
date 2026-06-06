@@ -64,3 +64,4 @@
 #define IDM_MODE_DARK       40003
 #define IDM_MODE_LIGHT      40004
 #define IDM_HELP_ABOUT      40005
+#define IDM_HOOK_TOGGLE     40006

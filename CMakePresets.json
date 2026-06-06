@@ -7,6 +7,7 @@
       "hidden": true,
       "generator": "Visual Studio 18 2026",
       "binaryDir": "${sourceDir}/build/cmake/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": { "UMBRA_BUILD_SAMPLE": "ON" }
     },
     {
@@ -14,42 +15,60 @@
       "displayName": "x64 (static CRT /MT)",
       "inherits": "vs-base",
       "architecture": "x64",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+      }
     },
     {
       "name": "x64-dynamic",
       "displayName": "x64 (dynamic CRT /MD)",
       "inherits": "vs-base",
       "architecture": "x64",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
     },
     {
       "name": "x86-static",
       "displayName": "x86 (static CRT /MT)",
       "inherits": "vs-base",
       "architecture": "Win32",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+        "VCPKG_TARGET_TRIPLET": "x86-windows-static"
+      }
     },
     {
       "name": "x86-dynamic",
       "displayName": "x86 (dynamic CRT /MD)",
       "inherits": "vs-base",
       "architecture": "Win32",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+        "VCPKG_TARGET_TRIPLET": "x86-windows"
+      }
     },
     {
       "name": "arm64-static",
       "displayName": "ARM64 (static CRT /MT)",
       "inherits": "vs-base",
       "architecture": "ARM64",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
+        "VCPKG_TARGET_TRIPLET": "arm64-windows-static"
+      }
     },
     {
       "name": "arm64-dynamic",
       "displayName": "ARM64 (dynamic CRT /MD)",
       "inherits": "vs-base",
       "architecture": "ARM64",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+        "VCPKG_TARGET_TRIPLET": "arm64-windows"
+      }
     }
   ],
   "buildPresets": [
