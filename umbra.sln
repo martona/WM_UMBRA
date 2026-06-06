@@ -7,6 +7,8 @@ Project("{D73E2E2D-A26A-4DB3-B9F0-365244304AD1}") = "umbra", "./project/umbra.vc
 EndProject
 Project("{D73E2E2D-A26A-4DB3-B9F0-365244304AD1}") = "umbra-sample", "./sample/umbra-sample.vcxproj", "{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}"
 EndProject
+Project("{D73E2E2D-A26A-4DB3-B9F0-365244304AD1}") = "umbra-hook", "./sample-hook/umbra-hook.vcxproj", "{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -41,6 +43,18 @@ Global
 		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|Win32.Build.0 = Release|Win32
 		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|x64.ActiveCfg = Release|x64
 		{B1E6B0A2-1C3D-4E5F-A6B7-C8D9E0F10203}.Release|x64.Build.0 = Release|x64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|ARM64.Build.0 = Debug|ARM64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|Win32.ActiveCfg = Debug|Win32
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|Win32.Build.0 = Debug|Win32
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|x64.ActiveCfg = Debug|x64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Debug|x64.Build.0 = Debug|x64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|ARM64.ActiveCfg = Release|ARM64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|ARM64.Build.0 = Release|ARM64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|Win32.ActiveCfg = Release|Win32
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|Win32.Build.0 = Release|Win32
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|x64.ActiveCfg = Release|x64
+		{C2F7A1B4-3E5D-4A6B-9C8D-1E2F30415263}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

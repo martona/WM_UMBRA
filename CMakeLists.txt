@@ -61,6 +61,20 @@ if(UMBRA_BUILD_SAMPLE)
     if(MSVC)
         target_compile_options(umbra-sample PRIVATE /utf-8)
     endif()
+
+    # umbra-hook: a diagnostic harness that segregates Windows' color-determination
+    # paths (user32 / export-vs-internal / uxtheme / DirectUI) onto tabs.
+    add_executable(umbra-hook WIN32
+        sample-hook/main.cpp
+        sample-hook/pages.cpp
+        sample-hook/bpanels.cpp
+        sample-hook/ebrowser.cpp
+        sample-hook/hook.rc)
+    target_link_libraries(umbra-hook PRIVATE umbra ole32 shell32 comdlg32)
+    target_compile_definitions(umbra-hook PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+    if(MSVC)
+        target_compile_options(umbra-hook PRIVATE /utf-8)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
