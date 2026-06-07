@@ -5691,6 +5691,14 @@ namespace umbra
 		// Color-queried but never drawn in testing; harmless to keep as a known band.
 		if (cls == L"Communications::Rebar")                         { outFill = dark; return true; }
 
+		// Shell-created tab control / listview header (SysTabControl32 / SysHeader32):
+		// real common controls, but umbra's custom-draw doesn't take here, so they fall
+		// through to uxtheme light. Our own tabs/headers custom-draw and never reach
+		// DrawThemeBackground, so darkening these classes catches only the shell ones.
+		if (cls == L"Tab" && partId == 1)                            { outFill = dark; return true; }
+		if (cls == L"Header" && (partId == 0 || partId == 1 || partId == 2))
+			{ outFill = dark; return true; }
+
 		return false;
 	}
 

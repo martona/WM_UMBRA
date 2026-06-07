@@ -287,13 +287,6 @@ namespace
         const HRESULT hr = g_realGetThemeColor(hTheme, iPartId, iStateId, iPropId, pColor);
         LogThemeColor(hTheme, iPartId, iStateId, iPropId,
             (SUCCEEDED(hr) && pColor != nullptr) ? *pColor : 0x00FFFFFF, hr);
-
-        // Next step (once a band we darken shows black text in the log): flip those
-        // text colours via a library decision and serve it here, e.g.
-        //   COLORREF dark{};
-        //   if (pColor != nullptr &&
-        //       umbra::darkThemeColor(ClassOf(hTheme).c_str(), iPartId, iStateId, iPropId, dark))
-        //   { *pColor = dark; return S_OK; }
         return hr;
     }
 

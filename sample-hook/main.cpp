@@ -308,6 +308,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
 {
     g_hInst = hInstance;
 
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    
     StartCreateWindowLog();   // THROWAWAY diagnostic: log startup threads, CreateThread, and window->thread
 
     INITCOMMONCONTROLSEX icc{ sizeof(icc),
