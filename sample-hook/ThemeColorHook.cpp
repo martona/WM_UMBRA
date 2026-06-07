@@ -221,6 +221,21 @@ namespace
         LogOnce(key, line);
     }
 
+    // Diagnostic for the GetThemeColor override path: one line per theme "hole" we fill
+    // (a failing query turned into a palette colour). Cheap — only the rare failed query
+    // that umbra::darkThemeColor claims reaches here.
+    void LogThemeColorOverride(const std::wstring& cls, int part, int state, int prop, COLORREF clr, HRESULT origHr)
+    {
+        wchar_t key[320];
+        ::StringCchPrintfW(key, ARRAYSIZE(key), L"CO|%s|%d|%d|%d", cls.c_str(), part, state, prop);
+        wchar_t line[400];
+        ::StringCchPrintfW(line, ARRAYSIZE(line),
+            L"GTC-OVR  %-30s part=%-4d state=%-3d prop=%-5d -> %06lX  (was hr=0x%08lX)\r\n",
+            cls.c_str(), part, state, prop,
+            static_cast<unsigned long>(clr & 0x00FFFFFF), static_cast<unsigned long>(origHr));
+        LogOnce(key, line);
+    }
+
     void LogThemeDraw(HTHEME hTheme, const std::wstring& cls, int part, int state, LPCRECT rc, const wchar_t* api)
     {
         const int l   = (rc != nullptr) ? static_cast<int>(rc->left) : 0;
@@ -287,6 +302,22 @@ namespace
         const HRESULT hr = g_realGetThemeColor(hTheme, iPartId, iStateId, iPropId, pColor);
         LogThemeColor(hTheme, iPartId, iStateId, iPropId,
             (SUCCEEDED(hr) && pColor != nullptr) ? *pColor : 0x00FFFFFF, hr);
+
+        // Fill theme "holes": when a colour query fails, the caller falls back to a colour
+        // our GetSysColor hook can't reach (e.g. comctl's themed list-item text → dark-on-
+        // dark in the breadcrumb ListviewPopup). umbra owns the decision; we carry it out
+        // and log each hole we patch, so a single run shows whether the lever fired.
+        if (pColor != nullptr)
+        {
+            const std::wstring cls = ClassOf(hTheme);
+            COLORREF over{};
+            if (umbra::darkThemeColor(cls.c_str(), iPartId, iStateId, iPropId, hr, over))
+            {
+                LogThemeColorOverride(cls, iPartId, iStateId, iPropId, over, hr);
+                *pColor = over;
+                return S_OK;
+            }
+        }
         return hr;
     }
 

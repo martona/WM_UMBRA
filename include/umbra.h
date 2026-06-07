@@ -329,6 +329,29 @@ namespace umbra
 	 */
 	[[nodiscard]] bool darkThemeBackground(const wchar_t* classList, int partId, int stateId, COLORREF& outFill) noexcept;
 
+	/**
+	 * @brief Decides UMBRA's override for a *failed* uxtheme colour query.
+	 *
+	 * The GetThemeColor analogue of @ref darkThemeBackground. Some themes define no
+	 * colour for a given part/state/prop, so `GetThemeColor` returns ELEMENT NOT FOUND
+	 * and the caller falls back to a colour the process-wide GetSysColor hook can't
+	 * reach (e.g. comctl's themed list-item text → dark-on-dark in the breadcrumb
+	 * ListviewPopup). Given the (class, part, state, prop) a caller asked for and the
+	 * real `GetThemeColor` result @p inHr, this reports whether UMBRA wants to supply a
+	 * colour — only ever for a query that actually FAILED, so a defined theme colour is
+	 * never disturbed. The uxtheme interception is an application concern (see the
+	 * `umbra-hook` harness); the library keeps only the decision.
+	 *
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `GetThemeColor`.
+	 * @param stateId   The state id from `GetThemeColor`.
+	 * @param propId    The property id from `GetThemeColor` (e.g. `TMT_TEXTCOLOR`).
+	 * @param inHr      The `HRESULT` the real `GetThemeColor` returned.
+	 * @param outColor  Receives the override colour when UMBRA overrides.
+	 * @return `true` (writing @p outColor) if UMBRA overrides this query; `false` otherwise.
+	 */
+	[[nodiscard]] bool darkThemeColor(const wchar_t* classList, int partId, int stateId, int propId, HRESULT inHr, COLORREF& outColor) noexcept;
+
 	// ========================================================================
 	// Enhancements to DarkMode.h
 	// ========================================================================
@@ -502,6 +525,13 @@ namespace umbra
 	/// interception (a `WH_CALLWNDPROCRET` hook, a `CreateThread` detour) lives in
 	/// the application (see the `umbra-hook` harness). Safe to call repeatedly.
 	void applyDarkToNewWindow(HWND hWnd);
+
+	/// Early per-window dark-mode prep for a `WH_CALLWNDPROC` hook: allows dark mode on
+	/// a just-created window (on `WM_NCCREATE`) BEFORE it opens its theme, so DUI/uxtheme
+	/// can resolve the dark theme variant. Deliberately does NOT call `SetWindowTheme`
+	/// (which breaks shell items-view selection). Complements @ref applyDarkToNewWindow
+	/// (the full `WH_CALLWNDPROCRET` pass that runs after `WM_CREATE`).
+	void prepDarkModeForNewWindow(HWND hWnd);
 
 	// ========================================================================
 	// Window, Parent, And Other Subclassing

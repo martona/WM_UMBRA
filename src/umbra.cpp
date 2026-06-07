@@ -5611,6 +5611,19 @@ namespace umbra
 			umbra::setWindowEraseBgSubclass(hWnd);
 	}
 
+	// Early dark-mode prep for a WH_CALLWNDPROC hook (runs on WM_NCCREATE, before the
+	// window proc and before the window opens its theme). Only allows dark mode — NO
+	// SetWindowTheme, which breaks shell items-view selection rendering — so DUI/uxtheme
+	// can resolve the dark theme variant. The full theming still runs from the
+	// WH_CALLWNDPROCRET pass (applyDarkToNewWindow).
+	void prepDarkModeForNewWindow(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		umbra::allowDarkModeForWindow(hWnd, umbra::isExperimentalActive());
+	}
+
 	// Maps a Win32 system-color index to UMBRA's dark palette. The pure-data half
 	// of the old process-wide GetSysColor/GetSysColorBrush hook: an application can
 	// inline-hook those user32 exports and consult this for the colour to serve,
@@ -5698,6 +5711,33 @@ namespace umbra
 		if (cls == L"Tab" && partId == 1)                            { outFill = dark; return true; }
 		if (cls == L"Header" && (partId == 0 || partId == 1 || partId == 2))
 			{ outFill = dark; return true; }
+
+		return false;
+	}
+
+	// Counterpart to darkThemeBackground for uxtheme TEXT colour — a targeted patch for
+	// theme "holes". When GetThemeColor FAILS (the theme defines no colour for that
+	// part/state/prop), the caller falls back to a colour our GetSysColor export hook
+	// can't reach: e.g. comctl's themed list-item text, which then draws dark-on-dark.
+	// The breadcrumb ListviewPopup is the case in hand — ItemsView::ListView's LVP_LISTITEM
+	// (part 1) base/normal state (0) TMT_TEXTCOLOR (3803) returns ELEMENT NOT FOUND, so its
+	// unselected rows take that fallback while the SELECTED state (which the theme DOES
+	// define) stays correct. Override ONLY the failing query, never a colour the theme
+	// actually provides — so this fills the hole without disturbing working text. Not gated
+	// by class: supplying the palette's view-text colour wherever a list item has no themed
+	// text colour is correct in any mode (getViewTextColor tracks the light/dark palette).
+	bool darkThemeColor(const wchar_t* /*classList*/, int partId, int stateId, int propId,
+	                    HRESULT inHr, COLORREF& outColor) noexcept
+	{
+		if (SUCCEEDED(inHr))
+			return false;
+
+		// part 1 = LVP_LISTITEM, state 0 = base/normal, prop 3803 = TMT_TEXTCOLOR
+		if (partId == 1 && stateId == 0 && propId == 3803)
+		{
+			outColor = umbra::getViewTextColor();
+			return true;
+		}
 
 		return false;
 	}
