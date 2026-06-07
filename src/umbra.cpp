@@ -304,7 +304,7 @@ namespace umbra
 			DWM_WINDOW_CORNER_PREFERENCE _roundCorner = DWMWCP_DEFAULT;
 			COLORREF _borderColor = DWMWA_COLOR_DEFAULT;
 			DWM_SYSTEMBACKDROP_TYPE _mica = DWMSBT_AUTO;
-			COLORREF _tvBackground = RGB(41, 49, 52);
+			COLORREF _tvBackground = RGB(25, 25, 25);   // 0x191919 native dark (tracks getViewBackgroundColor)
 			double _lightness = 50.0;
 			TreeViewStyle _tvStylePrev = TreeViewStyle::classic;
 			TreeViewStyle _tvStyle = TreeViewStyle::classic;
@@ -758,7 +758,8 @@ namespace umbra
 
 	/// Dark views colors
 	static constexpr ColorsView darkColorsView{
-		HEXRGB(0x293134),   // background
+		HEXRGB(0x191919),   // background  (Win11 native dark content fill — matches ItemsView /
+		                    //              ExplorerNavPane / DefView; was 0x293134 blue-slate)
 		HEXRGB(0xE0E2E4),   // text
 		HEXRGB(0x646464),   // gridlines
 		HEXRGB(0x202020),   // Header background
@@ -5371,10 +5372,11 @@ namespace umbra
 	// Reached by the child-walk but it paints its own body, and both the body and
 	// its label statics derive from COLOR_WINDOW / dialog faces that user32 resolves
 	// from the internal sys-color table — the process GetSysColor hook can't reach
-	// them, so they stay light. We darken the WHOLE field to the COLOR_WINDOW dark-
-	// equivalent (ctrlBackground): the body via WM_ERASEBKGND, and the child statics
-	// via WM_CTLCOLORSTATIC. Without the latter, aclui colours the statics dialog-
-	// dark (0x202020) and they read as black patches on the grey body.
+	// them, so they stay light. We darken the WHOLE field to the VIEW background — the
+	// same colour the listview above it uses — so the permissions list and the user
+	// list read as one surface: the body via WM_ERASEBKGND, the child statics via
+	// WM_CTLCOLORSTATIC. Without the latter, aclui colours the statics dialog-dark
+	// (0x202020) and they read as lighter patches on the body.
 	static LRESULT CALLBACK AcluiCheckListSubclass(
 		HWND hWnd,
 		UINT uMsg,
@@ -5401,7 +5403,7 @@ namespace umbra
 
 				RECT rcClient{};
 				::GetClientRect(hWnd, &rcClient);
-				::FillRect(reinterpret_cast<HDC>(wParam), &rcClient, umbra::getCtrlBackgroundBrush());
+				::FillRect(reinterpret_cast<HDC>(wParam), &rcClient, umbra::getViewBackgroundBrush());
 				return TRUE;
 			}
 
@@ -5415,8 +5417,8 @@ namespace umbra
 				const bool isChildEnabled = ::IsWindowEnabled(reinterpret_cast<HWND>(lParam)) == TRUE;
 				auto hdc = reinterpret_cast<HDC>(wParam);
 				::SetTextColor(hdc, isChildEnabled ? umbra::getTextColor() : umbra::getDisabledTextColor());
-				::SetBkColor(hdc, umbra::getCtrlBackgroundColor());
-				return reinterpret_cast<LRESULT>(umbra::getCtrlBackgroundBrush());
+				::SetBkColor(hdc, umbra::getViewBackgroundColor());
+				return reinterpret_cast<LRESULT>(umbra::getViewBackgroundBrush());
 			}
 
 			default:
@@ -5714,7 +5716,7 @@ namespace umbra
 	// no companion text override. Expanded from the DrawThemeBackground parts the
 	// umbra-hook harness logs.
 	bool darkThemeBackground(const wchar_t* classList, int partId,
-	                         [[maybe_unused]] int stateId, COLORREF& outFill) noexcept
+	                         int stateId, COLORREF& outFill) noexcept
 	{
 		if (classList == nullptr)
 			return false;
@@ -5740,7 +5742,16 @@ namespace umbra
 		// real common controls, but umbra's custom-draw doesn't take here, so they fall
 		// through to uxtheme light. Our own tabs/headers custom-draw and never reach
 		// DrawThemeBackground, so darkening these classes catches only the shell ones.
-		if (cls == L"Tab" && partId == 1)                            { outFill = dark; return true; }
+		// Tab items: the SELECTED tab (TABP_TABITEM state TIS_SELECTED=3) takes the control
+		// background — the same surface the DUI body below it uses (COLOR_WINDOW →
+		// ctrlBackground) — so the active tab visually JOINS "what's showing"; the rest
+		// recede to the darker window background. Only the shell's fall-through tabs (e.g.
+		// Advanced Security) reach here; our own tabs custom-draw and never do.
+		if (cls == L"Tab" && partId == 1)
+		{
+			outFill = (stateId == 3) ? umbra::getCtrlBackgroundColor() : dark;
+			return true;
+		}
 		if (cls == L"Header" && (partId == 0 || partId == 1 || partId == 2))
 			{ outFill = dark; return true; }
 
