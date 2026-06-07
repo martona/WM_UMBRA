@@ -18,8 +18,14 @@
 // Temporary in-tree sample; removed before this branch merges to umbra's main.
 
 #include <windows.h>
+#include <commctrl.h>
+#include <richedit.h>
 #include <dwmapi.h>
 #include <strsafe.h>
+
+#include <mutex>
+#include <string>
+#include <unordered_set>
 
 #include <umbra.h>
 #include "hook.h"   // setProcessWideColorHook / setProcessWideThemeColorHook (sample-hook)
@@ -39,15 +45,20 @@ namespace
     CRITICAL_SECTION g_dbgCs{};
     INIT_ONCE        g_dbgOnce = INIT_ONCE_STATIC_INIT;
 
+    std::mutex                       g_seenMutex;
+    std::unordered_set<std::wstring> g_seenClasses;   // dedup the themed-class trace
+
     BOOL CALLBACK DbgInitOnce(PINIT_ONCE, PVOID, PVOID*) noexcept
     {
-        wchar_t path[MAX_PATH]{};
-        const DWORD len = ::GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
-        for (DWORD i = len; i > 0; --i)
-            if (path[i - 1] == L'\\') { path[i] = L'\0'; break; }
-        ::StringCchCatW(path, ARRAYSIZE(path), L"umbra-inject.log");
-        g_dbg = ::CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                              nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        // TEMP: hardcoded + append. The old <module dir> path resolves to C:\Windows for
+        // regedit/explorer — only an *elevated* process can write there, so explorer
+        // (medium integrity) silently failed to log. FILE_APPEND_DATA so a crash-and-restart
+        // explorer (and the global hook's other processes) don't truncate the capture; just
+        // delete the file for a clean run.
+        const wchar_t* path =
+            L"C:\\Users\\Marton\\Desktop\\github\\WM_UMBRA\\build\\Debug\\x64\\umbra-inject.log";
+        g_dbg = ::CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         ::InitializeCriticalSection(&g_dbgCs);
         return TRUE;
     }
@@ -87,7 +98,10 @@ namespace
         wchar_t path[MAX_PATH]{};
         const DWORD n = ::GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
         const wchar_t* name = (n != 0 && n < ARRAYSIZE(path)) ? BaseName(path) : L"";
-        g_isTarget = SameI(name, L"regedit.exe") || SameI(name, L"regedt32.exe");
+        g_isTarget = SameI(name, L"regedit.exe")  || 
+                     SameI(name, L"regedt32.exe") ||
+//                   SameI(name, L"explorer.exe") ||
+                     SameI(name, L"mmc.exe");
     }
 
     // Pin so we survive the host's UnhookWindowsHookEx: regedit keeps its theming (and our
@@ -112,21 +126,90 @@ namespace
         return TRUE;
     }
 
-    // TEMP DIAGNOSTIC: for a top-level window, log its class + whether the DWM dark
-    // title-bar attribute is actually set after we themed it. Splits "frame never themed"
-    // (no line / hr fail) from "themed but overridden" (dark=1 yet bar still light).
-    void TraceTopLevel(HWND hwnd) noexcept
+    // TEMP DIAGNOSTIC: log each DISTINCT window class we subclass (once), with its parent
+    // class + top/child flag. In explorer this names the shell / input-experience windows
+    // we shouldn't be touching (cross-ref the InputHost fail-fast). Dedup'd, so it's the
+    // class universe, not a per-window flood.
+    void LogThemedWindow(HWND hwnd) noexcept
     {
-        if ((::GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) != 0)
-            return;
-        wchar_t cls[80] = L"?"; ::GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
-        BOOL dark = FALSE;
-        const HRESULT hr = ::DwmGetWindowAttribute(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/,
-                                                   &dark, sizeof(dark));
-        wchar_t line[256];
-        ::StringCchPrintfW(line, ARRAYSIZE(line), L"WM_CREATE [TOP] %-22s darkAttr=%d hr=0x%08lX\r\n",
-                           cls, static_cast<int>(dark), static_cast<unsigned long>(hr));
+        wchar_t cls[96] = L"?"; ::GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+        {
+            std::lock_guard<std::mutex> lock(g_seenMutex);
+            if (!g_seenClasses.insert(cls).second)
+                return;   // class already logged
+        }
+        wchar_t parent[96] = L"-";
+        const HWND hp = ::GetParent(hwnd);
+        if (hp != nullptr) { ::GetClassNameW(hp, parent, ARRAYSIZE(parent)); }
+        const bool top = (::GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) == 0;
+        wchar_t line[320];
+        ::StringCchPrintfW(line, ARRAYSIZE(line), L"themed %s %-34s parent=%s\r\n",
+                           top ? L"[TOP]" : L"     ", cls, parent);
         Dbg(line);
+    }
+
+    // Classes we must NOT touch: XAML/WinUI/Composition input islands + hidden, message-only,
+    // input, and system-plumbing windows. Subclassing these and perturbing their
+    // WM_CTLCOLOR/NOTIFY/ERASE either fail-fasts (InputHost / CTF input site) or is simply
+    // pointless (no visible UI). None are classic controls umbra themes. Grown empirically per
+    // target (explorer's InputSite; mmc's CTF / clipboard / GDI+ / .NET broadcast windows).
+    // The cleaner long-term shape is a per-target allow-list; this deny-list is the interim.
+    bool IsThemingBlacklisted(HWND hwnd) noexcept
+    {
+        wchar_t cls[128];
+        if (::GetClassNameW(hwnd, cls, ARRAYSIZE(cls)) == 0)
+            return false;
+
+        // Prefix matches (variable per-instance suffixes).
+        static const wchar_t* const kPrefixes[] = {
+            L"Windows.UI.",                // XAML/WinUI/Composition islands (InputHost fail-fast)
+            L".NET-BroadcastEventWindow",  // .NET runtime WM_SETTINGCHANGE broadcast window
+            L"WindowsForms10.",            // .NET WinForms: managed wndproc, native subclass faults it
+        };
+        for (const wchar_t* p : kPrefixes)
+            if (::wcsncmp(cls, p, ::wcslen(p)) == 0)
+                return true;
+
+        // Exact matches.
+        static const wchar_t* const kExacts[] = {
+            L"GDI+ Hook Window Class",
+            L"CLIPBRDWNDCLASS",
+            L"CicMarshalWndClass",
+            L"SystemUserAdapterWindowClass",
+            L"SnapMessageWindow",
+            L"MSCTFIME UI",
+            L"IME",
+            L"OperationStatusWindow",
+            L"OleMainThreadWndClass",      // OLE/COM hidden marshalling window
+            L"Event Viewer Snapin Synch",  // mmc Event Viewer snap-in hidden sync window
+        };
+        for (const wchar_t* e : kExacts)
+            if (::wcscmp(cls, e) == 0)
+                return true;
+
+        return false;
+    }
+
+    // A recognized leaf control (one umbra class-themes via its own subclass). These must
+    // NOT get the parent-helper subclasses (ctl-color / notify-customdraw) — those belong on
+    // dialog/frame HOSTS. The control's own subclass handles its internal children; its items'
+    // custom-draw is handled by its host's helper. Over-stacking the helpers on a control is
+    // redundant and, on an MFC host (mmc), faults during the WM_NCDESTROY reflection.
+    bool IsLeafControl(HWND hwnd) noexcept
+    {
+        wchar_t cls[64];
+        if (::GetClassNameW(hwnd, cls, ARRAYSIZE(cls)) == 0)
+            return false;
+        static const wchar_t* const kControls[] = {
+            WC_BUTTON, WC_STATIC, WC_COMBOBOX, WC_EDIT, WC_LISTBOX, WC_LISTVIEW,
+            WC_TREEVIEW, WC_TABCONTROL, WC_SCROLLBAR, WC_COMBOBOXEX, WC_LINK,
+            REBARCLASSNAME, TOOLBARCLASSNAME, UPDOWN_CLASS, STATUSCLASSNAME,
+            PROGRESS_CLASS, TRACKBAR_CLASS, RICHEDIT_CLASS, MSFTEDIT_CLASS,
+        };
+        for (const wchar_t* c : kControls)
+            if (::CompareStringOrdinal(cls, -1, c, -1, TRUE) == CSTR_EQUAL)
+                return true;
+        return false;
     }
 
     // Per-window theming — identical to sample-hook's AutoDarkMode, minus the EXE-only
@@ -136,11 +219,24 @@ namespace
         if (code == HC_ACTION && !t_theming)
         {
             const auto* info = reinterpret_cast<const CWPSTRUCT*>(lParam);
-            if (info->message == WM_NCCREATE && info->hwnd != nullptr)
+            if (info->message == WM_NCCREATE && info->hwnd != nullptr
+                && !IsThemingBlacklisted(info->hwnd))
             {
                 t_theming = true;
                 umbra::prepDarkModeForNewWindow(info->hwnd);   // early AllowDarkModeForWindow
                 t_theming = false;
+            }
+            else if (info->message == WM_DESTROY && info->hwnd != nullptr)
+            {
+                // Pull umbra's subclasses BEFORE the window proc handles WM_DESTROY — so we're
+                // out of the chain before an MFC host's nested WM_NCDESTROY view-teardown
+                // reflects through us and derefs a stale -1 (mmc). Each remove is a no-op when
+                // the subclass isn't present.
+                umbra::removeListViewCtrlSubclass(info->hwnd);
+                umbra::removeWindowCtlColorSubclass(info->hwnd);
+                umbra::removeWindowNotifyCustomDrawSubclass(info->hwnd);
+                umbra::removeWindowMenuBarSubclass(info->hwnd);
+                umbra::removeWindowEraseBgSubclass(info->hwnd);
             }
         }
         return ::CallNextHookEx(nullptr, code, wParam, lParam);
@@ -151,15 +247,22 @@ namespace
         if (code == HC_ACTION && !t_theming)
         {
             const auto* info = reinterpret_cast<const CWPRETSTRUCT*>(lParam);
-            if (info->message == WM_CREATE && info->hwnd != nullptr)
+            if (info->message == WM_CREATE && info->hwnd != nullptr
+                && !IsThemingBlacklisted(info->hwnd))
             {
                 t_theming = true;
-                umbra::applyDarkToNewWindow(info->hwnd);        // full per-window theming
+                // Leaf controls: class-specific subclass only (no parent-helper ctl-color/notify).
+                // Hosts (dialogs/frames/containers): full treatment.
+                if (IsLeafControl(info->hwnd))
+                    umbra::setDarkChildCtrl(info->hwnd);
+                else
+                    umbra::applyDarkToNewWindow(info->hwnd);
                 t_theming = false;
-                TraceTopLevel(info->hwnd);                       // TEMP DIAGNOSTIC
+                LogThemedWindow(info->hwnd);                     // TEMP DIAGNOSTIC
             }
             else if (info->message == WM_ACTIVATE && info->hwnd != nullptr
-                     && (::GetWindowLongPtrW(info->hwnd, GWL_STYLE) & WS_CHILD) == 0)
+                     && (::GetWindowLongPtrW(info->hwnd, GWL_STYLE) & WS_CHILD) == 0
+                     && !IsThemingBlacklisted(info->hwnd))
             {
                 // Some dialogs (comdlg32's Save/Export) clear the dark title-bar attribute
                 // during their own init — after our WM_CREATE pass — and repaint the caption
