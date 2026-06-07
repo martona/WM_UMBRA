@@ -99,7 +99,7 @@ namespace
         g_isTarget = SameI(name, L"regedit.exe")  || 
                      SameI(name, L"regedt32.exe") ||
 //                   SameI(name, L"umbra-sample.exe") ||
-//                   SameI(name, L"explorer.exe") ||
+                     SameI(name, L"explorer.exe") ||
                      SameI(name, L"mmc.exe");
     }
 

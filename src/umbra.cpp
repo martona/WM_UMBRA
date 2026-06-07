@@ -5759,22 +5759,25 @@ namespace umbra
 			return true;
 		}
 
-		// comctl32 TaskDialog — the modern "message box" (regedit's delete-key confirm,
-		// shell error prompts). comctl draws the whole body from two TaskDialog panels with
-		// no dark variant, so uxtheme paints them light: PRIMARYPANEL (part 1) is the entire
-		// client, SECONDARYPANEL (part 8) the button footer. Flat-fill both to the dialog
-		// background. The panel text is comctl-drawn near-black, so it needs the companion
-		// override in darkThemeColor (TaskDialogStyle) to stay readable on the dark fill.
-		if (cls == L"TaskDialog")
+		// comctl32 TaskDialog — the modern "message box" (regedit's delete-key confirm, shell
+		// error prompts) and classic dialogs that borrow its theme (explorer's Run dialog is a
+		// #32770 that paints its background from TASKDIALOG panes). The panes have no dark
+		// variant, so uxtheme draws them light. The class string's case varies by caller (comctl
+		// opens "TaskDialog", shell32 opens "TASKDIALOG"), so match case-insensitively. Two-tone
+		// by layout: the content pane takes the (lighter) control background, the footer/secondary
+		// pane the dialog background. regedit draws PRIMARYPANEL (1) + SECONDARYPANEL (8); the Run
+		// dialog draws CONTENTPANE (4) + FOOTNOTEPANE (15). comctl-drawn panel text stays readable
+		// via the darkThemeColor TaskDialogStyle override.
+		if (::CompareStringOrdinal(classList, -1, L"TaskDialog", -1, TRUE) == CSTR_EQUAL)
 		{
-			if (partId == 1)
+			if (partId == 1 || partId == 4)        // content panes
 			{
-				outFill = umbra::getCtrlBackgroundColor(); 
+				outFill = umbra::getDlgBackgroundColor();
 				return true;
 			}
-			else if (partId == 8)
+			if (partId == 8 || partId == 15)       // footer / secondary panes
 			{
-				outFill = umbra::getDlgBackgroundColor(); 
+				outFill = umbra::getCtrlBackgroundColor();
 				return true;
 			}
 		}
@@ -5806,6 +5809,18 @@ namespace umbra
 		    && propId == 3803 /*TMT_TEXTCOLOR*/)
 		{
 			outColor = (partId == 2) ? umbra::getLinkTextColor() : umbra::getTextColor();
+			return true;
+		}
+
+		// explorer's Run dialog fills its PRIMARYPANEL by reading TASKDIALOG's TMT_FILLCOLOR
+		// (3802) and FillRect-ing it itself — a SUCCESSFUL query the DrawThemeBackground hook
+		// can't intercept. Serve the control background (the part-1 content shade
+		// darkThemeBackground uses) so any PRIMARYPANEL strip the drawn panes don't cover stays
+		// dark, not white.
+		if (classList != nullptr && propId == 3802 /*TMT_FILLCOLOR*/ && partId == 1
+		    && ::CompareStringOrdinal(classList, -1, L"TaskDialog", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getCtrlBackgroundColor();
 			return true;
 		}
 
