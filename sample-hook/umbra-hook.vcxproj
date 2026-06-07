@@ -50,8 +50,9 @@
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
 
-  <!-- umbra.lib now depends on Detours; this exe must find detours.lib at link.
-       Enable the same vcpkg manifest integration (static triplet for /MT). -->
+  <!-- The process-wide Detours hooks (ProcessColorHook.cpp / AutoDarkMode.cpp)
+       live in this exe; enable vcpkg manifest integration so <detours/detours.h>
+       and detours.lib resolve (static triplet for /MT). -->
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnabled>true</VcpkgEnabled>
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -95,6 +96,9 @@
     <ClCompile Include="pages.cpp" />
     <ClCompile Include="bpanels.cpp" />
     <ClCompile Include="ebrowser.cpp" />
+    <ClCompile Include="createwlog.cpp" />
+    <ClCompile Include="ProcessColorHook.cpp" />
+    <ClCompile Include="AutoDarkMode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hook.rc" />

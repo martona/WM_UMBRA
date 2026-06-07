@@ -1,7 +1,7 @@
 {
   "name": "umbra-dev",
   "version-string": "1.1.1",
-  "description": "Build-time manifest for developing WM_UMBRA in-tree. Pulls Microsoft Detours for the process-wide GetSysColor/GetSysColorBrush hook (src/ProcessColorHook.cpp). Consumers of the umbra package get Detours via the overlay port in vcpkg-overlay/umbra.",
+  "description": "Build-time manifest for developing WM_UMBRA in-tree. Pulls Microsoft Detours for the umbra-hook sample harness (sample-hook/ProcessColorHook.cpp + AutoDarkMode.cpp), which owns the process-wide GetSysColor/GetSysColorBrush and auto-dark hooks. The umbra library itself no longer depends on Detours.",
   "homepage": "https://github.com/martona/WM_UMBRA",
   "dependencies": [
     "detours"

@@ -26,3 +26,22 @@ void ExplorerBrowserDestroy();
 void ShowModernFileDialog(HWND owner);   // IFileOpenDialog  (DirectUI)
 void ShowClassicColorDialog(HWND owner); // ChooseColor      (comdlg32, source A)
 void ShowPermissionsDialog(HWND owner);  // file Security dialog; its Advanced button = DirectUI ACE editor
+
+// --- Process-wide dark hooks (ProcessColorHook.cpp / AutoDarkMode.cpp) ------
+// The application / interception half of UMBRA's dark mode: these install the
+// Detours-based, process-wide hooks that drive the library's per-window and
+// per-color theming decisions (umbra::applyDarkToNewWindow / umbra::darkSysColor).
+// The Detours dependency lives here, in the app, not in the umbra library.
+
+// GetSysColor / GetSysColorBrush inline hook (classic + DirectUI color residue).
+bool setProcessWideColorHook() noexcept;
+void unsetProcessWideColorHook() noexcept;
+
+// WH_CALLWNDPROCRET + CreateThread self-hook: themes every window on every thread
+// as it is created. Install before the window tree (and before CoInitializeEx).
+bool setAutoDarkMode() noexcept;
+void unsetAutoDarkMode() noexcept;
+
+// --- THROWAWAY: CreateWindowEx creation logger (createwlog.cpp) -------------
+void StartCreateWindowLog();
+void StopCreateWindowLog();

@@ -5467,6 +5467,91 @@ namespace umbra
 		::EnumChildWindows(hParent, umbra::DarkEnumChildProc, reinterpret_cast<LPARAM>(&p));
 	}
 
+	// Applies the class-specific subclass/theme that DarkEnumChildProc gives a
+	// child — but to hWnd ITSELF. Lets a per-window auto-theming hook (e.g. the
+	// umbra-hook harness) class-theme each control as it is created, reusing the
+	// same dispatch the tree walk uses rather than duplicating the big class switch.
+	void setDarkChildCtrl(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		DarkModeParams p{
+			umbra::isExperimentalActive() ? L"DarkMode_Explorer" : nullptr
+			, true   // subclass
+			, true   // theme
+		};
+
+		umbra::DarkEnumChildProc(hWnd, reinterpret_cast<LPARAM>(&p));
+	}
+
+	// The hook-free "theme this freshly-created window" decision a per-window
+	// auto-theming hook applies on WM_CREATE: window-level canvas/ctl-color, the
+	// class-specific child subclass, and a menu-bar subclass when the window owns a
+	// menu. The interception that drives it (a WH_CALLWNDPROCRET hook + CreateThread
+	// detour) is an application concern and lives outside the library.
+	void applyDarkToNewWindow(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		umbra::setDarkWndNotifySafe(hWnd);
+		umbra::setDarkChildCtrl(hWnd);
+		if (::GetMenu(hWnd) != nullptr)
+			umbra::setWindowMenuBarSubclass(hWnd);
+	}
+
+	// Maps a Win32 system-color index to UMBRA's dark palette. The pure-data half
+	// of the old process-wide GetSysColor/GetSysColorBrush hook: an application can
+	// inline-hook those user32 exports and consult this for the colour to serve,
+	// keeping the palette knowledge in the library and the interception (Detours)
+	// in the app. Returns false for indices UMBRA does not override (the caller
+	// then uses the real system color). Mirrors how UMBRA seeds its palette from
+	// sys colors.
+	bool darkSysColor(int nIndex, COLORREF& outColor) noexcept
+	{
+		switch (nIndex)
+		{
+		// --- backgrounds ---
+		case COLOR_WINDOW:                outColor = umbra::getCtrlBackgroundColor(); return true;
+		case COLOR_BTNFACE:               // == COLOR_3DFACE
+		case COLOR_3DLIGHT:
+		case COLOR_ACTIVECAPTION:
+		case COLOR_INACTIVECAPTION:
+		case COLOR_MENU:
+		case COLOR_MENUBAR:
+		case COLOR_SCROLLBAR:
+		case COLOR_BACKGROUND:            // == COLOR_DESKTOP
+		case COLOR_APPWORKSPACE:
+		case COLOR_INFOBK:                outColor = umbra::getBackgroundColor(); return true;
+
+		// --- text ---
+		case COLOR_WINDOWTEXT:
+		case COLOR_BTNTEXT:
+		case COLOR_MENUTEXT:
+		case COLOR_CAPTIONTEXT:
+		case COLOR_INFOTEXT:
+		case COLOR_HIGHLIGHTTEXT:         outColor = umbra::getTextColor(); return true;
+		case COLOR_GRAYTEXT:
+		case COLOR_INACTIVECAPTIONTEXT:   outColor = umbra::getDisabledTextColor(); return true;
+		case COLOR_HOTLIGHT:              outColor = umbra::getLinkTextColor(); return true;
+
+		// --- selection / highlight ---
+		case COLOR_HIGHLIGHT:
+		case COLOR_MENUHILIGHT:           outColor = umbra::getHotBackgroundColor(); return true;
+
+		// --- edges / 3D ---
+		case COLOR_WINDOWFRAME:
+		case COLOR_3DDKSHADOW:
+		case COLOR_3DSHADOW:              // == COLOR_BTNSHADOW
+		case COLOR_ACTIVEBORDER:
+		case COLOR_INACTIVEBORDER:        outColor = umbra::getEdgeColor(); return true;
+		case COLOR_3DHIGHLIGHT:           outColor = umbra::getHotEdgeColor(); return true; // == BTNHIGHLIGHT/3DHILIGHT
+
+		default:                          return false;
+		}
+	}
+
 	void setChildCtrlsTheme(HWND hParent)
 	{
 #if defined(_DARKMODE_SUPPORT_OLDER_OS)

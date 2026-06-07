@@ -42,13 +42,11 @@
   <Import Project="$(VCTargetsPath)/Microsoft.Cpp.props" />
   <Import Project="./umbra.Cpp.props" />
 
-  <!-- Detours via vcpkg (manifest mode; see ../vcpkg.json). Properties must be
-       set before the user-wide vcpkg integration props are imported below. -->
+  <!-- umbra no longer uses Detours/vcpkg (the process-wide hooks moved to the
+       umbra-hook app). Disable the user-wide vcpkg integration explicitly so it
+       doesn't warn about the in-tree manifest, which exists only for the sample. -->
   <PropertyGroup Label="Vcpkg">
-    <VcpkgEnabled>true</VcpkgEnabled>
-    <VcpkgEnableManifest>true</VcpkgEnableManifest>
-    <VcpkgUseStatic Condition="'$(UmbraCRT)'!='DLL'">true</VcpkgUseStatic>
-    <VcpkgUseStatic Condition="'$(UmbraCRT)'=='DLL'">false</VcpkgUseStatic>
+    <VcpkgEnabled>false</VcpkgEnabled>
   </PropertyGroup>
 
   <ImportGroup Label="ExtensionSettings" />
@@ -113,12 +111,6 @@
     <ClCompile Include="../src/DarkMode.cpp" />
     <ClCompile Include="../src/umbra.cpp" />
     <ClCompile Include="../src/SysColorHook.cpp" />
-    <ClCompile Include="../src/ProcessColorHook.cpp">
-      <!-- Detours inline-hook idioms (function-pointer casts) don't pass UMBRA's
-           /WX + CppCoreCheck; relax just this file. -->
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <AdditionalOptions>%(AdditionalOptions) /analyze-</AdditionalOptions>
-    </ClCompile>
   </ItemGroup>
   
   <!-- Include Resource files -->

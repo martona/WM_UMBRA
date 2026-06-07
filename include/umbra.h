@@ -289,30 +289,24 @@ namespace umbra
 	void setSysColor(int nIndex, COLORREF color) noexcept;
 
 	/**
-	 * @brief Installs a process-wide inline hook (Microsoft Detours) on the
-	 *        user32 exports `GetSysColor` and `GetSysColorBrush`, returning
-	 *        UMBRA's dark palette for the colors it overrides.
+	 * @brief Maps a Win32 system-color index to UMBRA's dark palette.
 	 *
-	 * A parallel mechanism to per-window theming (`setDarkWndNotifySafe`): it
-	 * needs no subclassing and reaches callers UMBRA never sees. It only affects
-	 * code that calls the exports — user32's internal non-client painting and
-	 * uxtheme theme-part drawing are unaffected — and, being context-free (no
-	 * HWND), it is all-or-nothing per process: while installed it serves the
-	 * current palette (install/uninstall is the on/off switch).
+	 * The pure-data half of what used to be the process-wide GetSysColor hook:
+	 * given a `COLOR_*` index, reports whether UMBRA overrides it and, if so, the
+	 * dark `COLORREF` to serve (tracking the live palette via the `get*Color()`
+	 * accessors). The interception itself — inline-hooking the user32 exports —
+	 * is deliberately NOT here: that is an application concern (see the
+	 * `umbra-hook` harness), so the library carries the colour decision without
+	 * pulling in Detours or rewriting any process-global behaviour. Initialise
+	 * the palette (`initDarkMode` / `setDarkModeConfig` / `setDefaultColors`) for
+	 * meaningful results.
 	 *
-	 * Returned values track the current palette (see the `get*Color()`
-	 * accessors), so initialise the palette (`initDarkMode` / `setDarkModeConfig`
-	 * / `setDefaultColors`) for meaningful results. Independent of the comctl32
-	 * IAT hook behind `setSysColor`; the two may coexist.
-	 *
-	 * @return `true` if installed (or already installed); `false` if Detours
-	 *         failed to attach.
+	 * @param nIndex   One of the `COLOR_*` system-color indices.
+	 * @param outColor Receives the dark color when the index is overridden.
+	 * @return `true` and writes @p outColor if UMBRA overrides @p nIndex;
+	 *         `false` (leaving @p outColor untouched) otherwise.
 	 */
-	bool setProcessWideColorHook() noexcept;
-
-	/// Removes the process-wide GetSysColor/GetSysColorBrush hook installed by
-	/// `setProcessWideColorHook()` and frees its cached brushes.
-	void unsetProcessWideColorHook() noexcept;
+	[[nodiscard]] bool darkSysColor(int nIndex, COLORREF& outColor) noexcept;
 
 	// ========================================================================
 	// Enhancements to DarkMode.h
@@ -474,6 +468,19 @@ namespace umbra
 
 	void setChildCtrlsSubclassAndTheme(HWND hParent, bool subclass = true, bool theme = true);
 	void setChildCtrlsTheme(HWND hParent);
+
+	/// Applies the class-specific subclass + dark theme that the child-walk gives a
+	/// control, but to `hWnd` itself (not its children) — for per-window auto-theming
+	/// hooks (e.g. the `umbra-hook` harness). Reuses the internal class dispatch.
+	void setDarkChildCtrl(HWND hWnd);
+
+	/// Themes a freshly-created window the way a per-window auto-theming hook wants
+	/// on `WM_CREATE`: `setDarkWndNotifySafe` (window canvas + ctl-color) +
+	/// `setDarkChildCtrl` (class-specific) + a menu-bar subclass when the window owns
+	/// a menu. The hook-free decision half of the old `setAutoDarkMode`; the
+	/// interception (a `WH_CALLWNDPROCRET` hook, a `CreateThread` detour) lives in
+	/// the application (see the `umbra-hook` harness). Safe to call repeatedly.
+	void applyDarkToNewWindow(HWND hWnd);
 
 	// ========================================================================
 	// Window, Parent, And Other Subclassing

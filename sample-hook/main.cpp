@@ -1,9 +1,12 @@
 // umbra-hook — a color-path probe for the Detours hooking approach.
 // -------------------------------------------------------------------------
-// The harness applies NO per-window theming. The ONLY thing that can change
-// its appearance is UMBRA's process-wide inline hook on GetSysColor /
-// GetSysColorBrush (umbra::setProcessWideColorHook). So whatever moves when you
-// toggle the hook is attributable to the hook alone.
+// The harness applies dark mode automatically, with no per-window calls in app
+// code: the harness's own setAutoDarkMode() (AutoDarkMode.cpp) installs a
+// WH_CALLWNDPROCRET hook that themes each window (via umbra::applyDarkToNewWindow)
+// as it is created, and setProcessWideColorHook() (ProcessColorHook.cpp) covers
+// the classic GetSysColor / DirectUI residue. The interception machinery (Detours)
+// lives here in the app; UMBRA supplies the per-window / per-color theming
+// decisions (applyDarkToNewWindow / darkSysColor).
 //
 // Specimens are segregated by color-determination path, one per tab:
 //   A  raw user32 / GDI controls   (GetSysColor + WM_CTLCOLOR* — hookable)
@@ -42,8 +45,9 @@ namespace
     HWND g_hStatus  = nullptr;
     HWND g_hToolbar = nullptr;
     HWND g_hPages[4]{};
-    int  g_modeId   = IDM_MODE_DARK;   // which palette the hook serves
-    bool g_hookOn   = false;           // is the Detours hook currently installed
+    int  g_modeId   = IDM_MODE_DARK;   // which palette the color hook serves
+    bool g_hookOn   = false;           // is the GetSysColor hook installed (runtime-toggleable)
+    bool g_themeOn  = false;           // is the uxtheme hook installed (fixed at startup)
 
     struct PageDef { int templ; DLGPROC proc; const wchar_t* label; };
     const PageDef kPages[4] = {
@@ -81,9 +85,9 @@ namespace
     {
         if (g_hStatus != nullptr)
         {
-            wchar_t buf[128];
-            ::wsprintfW(buf, L"Palette: %s   \x00B7   Hook: %s",
-                PaletteLabel(), g_hookOn ? L"ON (Detours)" : L"OFF");
+            wchar_t buf[160];
+            ::wsprintfW(buf, L"Palette: %s   \x00B7   Color hook: %s   \x00B7   Auto-theme: %s",
+                PaletteLabel(), g_hookOn ? L"ON" : L"OFF", g_themeOn ? L"ON" : L"OFF");
             ::SendMessageW(g_hStatus, SB_SETTEXTW, 1, reinterpret_cast<LPARAM>(buf));
         }
     }
@@ -247,9 +251,9 @@ INT_PTR CALLBACK FrameProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
             ::MessageBoxW(hDlg,
                 L"umbra-hook\n"
                 L"Color-path probe for UMBRA's process-wide Detours hook.\n\n"
-                L"No per-window theming is applied — only the hook on GetSysColor/\n"
-                L"GetSysColorBrush can change anything. Toggle it under Mode, and\n"
-                L"watch which of tabs A/B/C/E move.",
+                L"No per-window theming is applied. Appearance comes only from two\n"
+                L"process-wide hooks: GetSysColor/Brush (classic + DirectUI) and\n"
+                L"uxtheme OpenThemeData (themed common controls, dark variants).",
                 L"About umbra-hook", MB_OK | MB_ICONINFORMATION);
             return TRUE;
 
@@ -267,12 +271,12 @@ INT_PTR CALLBACK FrameProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
         case IDM_HOOK_TOGGLE:
             if (g_hookOn)
             {
-                umbra::unsetProcessWideColorHook();
+                unsetProcessWideColorHook();
                 g_hookOn = false;
             }
             else
             {
-                g_hookOn = umbra::setProcessWideColorHook();
+                g_hookOn = setProcessWideColorHook();
             }
             UpdateStatus();
             UpdateMenuChecks(hDlg);
@@ -300,7 +304,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
 {
     g_hInst = hInstance;
 
-    const HRESULT hrCo = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    StartCreateWindowLog();   // THROWAWAY diagnostic: log startup threads, CreateThread, and window->thread
 
     INITCOMMONCONTROLSEX icc{ sizeof(icc),
         ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES | ICC_TAB_CLASSES |
@@ -309,18 +313,27 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
         ICC_USEREX_CLASSES | ICC_COOL_CLASSES };
     ::InitCommonControlsEx(&icc);
 
-    // Populate UMBRA's dark palette (plain data — NO theming, NO IAT hook, NO
-    // experimental app-mode), then install the process-wide hook BEFORE any
-    // window is created so the whole tree is built under it. The Mode menu's
-    // "color hook" item toggles it off/on at runtime.
+    // Full umbra dark-mode init (experimental + app dark mode + palette), forced
+    // dark — before any window or extra thread exists.
+    umbra::initDarkMode();
     ApplyPalette(IDM_MODE_DARK);
-    g_hookOn = umbra::setProcessWideColorHook();
+    g_hookOn = setProcessWideColorHook();   // classic + DirectUI color residue
+
+    // Install auto-theming while this is still the ONLY thread: the current-thread
+    // WH_CALLWNDPROCRET hook + a CreateThread detour together cover every thread
+    // the process spawns afterward (COM workers, and the shell's property-sheet
+    // thread that raises the Permissions / Advanced Security dialogs) — no sweep.
+    g_themeOn = setAutoDarkMode();
+
+    // COM for tab E's shell objects; any threads it spawns now inherit the hook.
+    const HRESULT hrCo = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     HWND hDlg = ::CreateDialogParamW(hInstance, MAKEINTRESOURCEW(IDD_FRAME),
         nullptr, FrameProc, 0);
     if (hDlg == nullptr)
     {
-        umbra::unsetProcessWideColorHook();
+        unsetAutoDarkMode();
+        unsetProcessWideColorHook();
         if (SUCCEEDED(hrCo)) ::CoUninitialize();
         return 1;
     }
@@ -337,7 +350,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
         }
     }
 
-    umbra::unsetProcessWideColorHook();
+    unsetAutoDarkMode();
+    unsetProcessWideColorHook();
+    StopCreateWindowLog();
     if (SUCCEEDED(hrCo)) ::CoUninitialize();
     return static_cast<int>(msg.wParam);
 }

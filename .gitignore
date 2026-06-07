@@ -378,3 +378,4 @@ vcpkg_installed/
 
 # claude
 .claude/settings.local.json
+HANDOFF.md
