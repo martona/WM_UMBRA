@@ -4,23 +4,73 @@
 
 // Shared across the umbra-hook translation units.
 
-// --- Diagnostic logs: one fixed location ----------------------------------
-// Every harness/payload diagnostic log (umbra-inject.log, themecolor.log, autodark.log,
-// createwlog.txt) goes to ONE hardcoded directory under the repo, so they never scatter
-// across module dirs. The old <module dir> path resolved to C:\Windows / system32 for an
-// injected regedit/mmc/explorer — which a medium-integrity process can't even write — so
-// logs silently vanished or landed somewhere you had to hunt for. A repo path under the
-// user profile is writable by both elevated and medium-integrity targets. Hardcoded by
-// design: throwaway diagnostic plumbing that never ships. Delete the files for a clean run.
+// --- Diagnostic logs: one fixed location, one file per target -------------
+// Every harness/payload diagnostic log goes to ONE hardcoded directory under the repo, so
+// they never scatter across module dirs. (The old <module dir> path resolved to C:\Windows /
+// system32 for an injected regedit/mmc/explorer — which a medium-integrity process can't even
+// write — so logs silently vanished or landed somewhere you had to hunt for. A repo path under
+// the user profile is writable by both elevated and medium-integrity targets.) The running
+// .exe's name is appended to each log's base, so the global hook's several targets write
+// SEPARATE files — themecolor-regedit.log, themecolor-mmc.log, umbra-inject-explorer.log —
+// instead of clobbering one shared file. Hardcoded by design: throwaway diagnostic plumbing
+// that never ships. Delete the files for a clean run.
 inline constexpr const wchar_t* kUmbraLogDir =
     L"C:\\Users\\Marton\\Desktop\\github\\WM_UMBRA\\logs";
 
-// Composes "<kUmbraLogDir>\<fileName>" into `out`, creating the directory if needed.
-// `out` is always left a valid (possibly truncated) string; returns false only if too small.
+// Writes the running module's base name without extension into `out` (e.g. "regedit" for
+// C:\Windows\regedit.exe; "umbra-hook" for the in-process harness). Falls back to "unknown".
+inline void umbraExeStem(wchar_t* out, size_t outCount) noexcept
+{
+    wchar_t path[MAX_PATH];
+    const DWORD n = ::GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (n == 0 || n >= ARRAYSIZE(path))
+    {
+        ::StringCchCopyW(out, outCount, L"unknown");
+        return;
+    }
+    wchar_t* base = path;
+    for (wchar_t* p = path; *p != L'\0'; ++p)
+        if (*p == L'\\' || *p == L'/')
+            base = p + 1;
+    wchar_t* dot = nullptr;
+    for (wchar_t* p = base; *p != L'\0'; ++p)
+        if (*p == L'.')
+            dot = p;
+    if (dot != nullptr)
+        *dot = L'\0';
+    ::StringCchCopyW(out, outCount, base);
+}
+
+// Composes "<kUmbraLogDir>\<base>-<exe><ext>" into `out` (e.g. "...\themecolor-regedit.log"),
+// creating the directory if needed. `out` is always left a valid (possibly truncated) string;
+// returns false only if too small.
 inline bool umbraLogPath(const wchar_t* fileName, wchar_t* out, size_t outCount) noexcept
 {
     (void)::CreateDirectoryW(kUmbraLogDir, nullptr);   // succeeds, or already exists
-    return SUCCEEDED(::StringCchPrintfW(out, outCount, L"%s\\%s", kUmbraLogDir, fileName));
+
+    wchar_t exe[64];
+    umbraExeStem(exe, ARRAYSIZE(exe));
+
+    // Split fileName at its last '.', so the exe stem lands on the base, before the extension:
+    // "themecolor.log" -> "themecolor-<exe>.log".
+    wchar_t base[64];
+    const wchar_t* ext = L"";
+    const wchar_t* dot = nullptr;
+    for (const wchar_t* p = fileName; *p != L'\0'; ++p)
+        if (*p == L'.')
+            dot = p;
+    if (dot != nullptr)
+    {
+        ext = dot;
+        ::StringCchCopyNW(base, ARRAYSIZE(base), fileName, static_cast<size_t>(dot - fileName));
+    }
+    else
+    {
+        ::StringCchCopyW(base, ARRAYSIZE(base), fileName);
+    }
+
+    return SUCCEEDED(::StringCchPrintfW(out, outCount, L"%s\\%s-%s%s",
+                                        kUmbraLogDir, base, exe, ext));
 }
 
 extern HINSTANCE g_hInst;
