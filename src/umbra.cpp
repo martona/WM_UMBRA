@@ -5600,6 +5600,15 @@ namespace umbra
 		umbra::setDarkChildCtrl(hWnd);
 		if (::GetMenu(hWnd) != nullptr)
 			umbra::setWindowMenuBarSubclass(hWnd);
+
+		// Flash prevention: a top-level window erases its client with the (light)
+		// class brush on first show, before its content paints — the white "flashbang".
+		// Installing a dark WM_ERASEBKGND subclass here, at WM_CREATE (the first chance
+		// there is), makes that very first erase dark, so the compositor never has a
+		// light frame to show. Top-level only — child controls keep their per-class
+		// background shade.
+		if ((::GetWindowLongPtrW(hWnd, GWL_STYLE) & WS_CHILD) == 0)
+			umbra::setWindowEraseBgSubclass(hWnd);
 	}
 
 	// Maps a Win32 system-color index to UMBRA's dark palette. The pure-data half
