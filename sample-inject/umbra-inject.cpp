@@ -73,6 +73,8 @@ namespace
 
 int main()
 {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::printf("umbra-inject - dark-theming host (stub: regedit title bar)\n");
     std::printf("uiAccess: %s\n\n",

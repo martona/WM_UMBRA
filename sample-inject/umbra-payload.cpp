@@ -18,6 +18,8 @@
 // Temporary in-tree sample; removed before this branch merges to umbra's main.
 
 #include <windows.h>
+#include <dwmapi.h>
+#include <strsafe.h>
 
 #include <umbra.h>
 #include "hook.h"   // setProcessWideColorHook / setProcessWideThemeColorHook (sample-hook)
@@ -31,6 +33,39 @@ namespace
 
     thread_local bool t_threadHooked = false;         // CALLWNDPROC[RET] installed on this thread?
     thread_local bool t_theming      = false;         // re-entrancy guard (theming sends messages)
+
+    // ---- TEMP DIAGNOSTIC: top-level theming trace -> <target dir>\umbra-inject.log ----
+    HANDLE           g_dbg     = INVALID_HANDLE_VALUE;
+    CRITICAL_SECTION g_dbgCs{};
+    INIT_ONCE        g_dbgOnce = INIT_ONCE_STATIC_INIT;
+
+    BOOL CALLBACK DbgInitOnce(PINIT_ONCE, PVOID, PVOID*) noexcept
+    {
+        wchar_t path[MAX_PATH]{};
+        const DWORD len = ::GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+        for (DWORD i = len; i > 0; --i)
+            if (path[i - 1] == L'\\') { path[i] = L'\0'; break; }
+        ::StringCchCatW(path, ARRAYSIZE(path), L"umbra-inject.log");
+        g_dbg = ::CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        ::InitializeCriticalSection(&g_dbgCs);
+        return TRUE;
+    }
+
+    void Dbg(const wchar_t* line) noexcept
+    {
+        ::InitOnceExecuteOnce(&g_dbgOnce, DbgInitOnce, nullptr, nullptr);
+        if (g_dbg == INVALID_HANDLE_VALUE)
+            return;
+        char u[512];
+        const int n = ::WideCharToMultiByte(CP_UTF8, 0, line, -1, u, sizeof(u), nullptr, nullptr);
+        if (n <= 1)
+            return;
+        ::EnterCriticalSection(&g_dbgCs);
+        DWORD w = 0; ::WriteFile(g_dbg, u, static_cast<DWORD>(n - 1), &w, nullptr); ::FlushFileBuffers(g_dbg);
+        ::LeaveCriticalSection(&g_dbgCs);
+    }
+    // ------------------------------------------------------------------------------------
 
     const wchar_t* BaseName(const wchar_t* path) noexcept
     {
@@ -77,6 +112,23 @@ namespace
         return TRUE;
     }
 
+    // TEMP DIAGNOSTIC: for a top-level window, log its class + whether the DWM dark
+    // title-bar attribute is actually set after we themed it. Splits "frame never themed"
+    // (no line / hr fail) from "themed but overridden" (dark=1 yet bar still light).
+    void TraceTopLevel(HWND hwnd) noexcept
+    {
+        if ((::GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) != 0)
+            return;
+        wchar_t cls[80] = L"?"; ::GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+        BOOL dark = FALSE;
+        const HRESULT hr = ::DwmGetWindowAttribute(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/,
+                                                   &dark, sizeof(dark));
+        wchar_t line[256];
+        ::StringCchPrintfW(line, ARRAYSIZE(line), L"WM_CREATE [TOP] %-22s darkAttr=%d hr=0x%08lX\r\n",
+                           cls, static_cast<int>(dark), static_cast<unsigned long>(hr));
+        Dbg(line);
+    }
+
     // Per-window theming — identical to sample-hook's AutoDarkMode, minus the EXE-only
     // self-hook/CreateThread machinery (the CBT bootstrap below replaces it).
     LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam)
@@ -104,6 +156,31 @@ namespace
                 t_theming = true;
                 umbra::applyDarkToNewWindow(info->hwnd);        // full per-window theming
                 t_theming = false;
+                TraceTopLevel(info->hwnd);                       // TEMP DIAGNOSTIC
+            }
+            else if (info->message == WM_ACTIVATE && info->hwnd != nullptr
+                     && (::GetWindowLongPtrW(info->hwnd, GWL_STYLE) & WS_CHILD) == 0)
+            {
+                // Some dialogs (comdlg32's Save/Export) clear the dark title-bar attribute
+                // during their own init — after our WM_CREATE pass — and repaint the caption
+                // light. Re-assert once, when we find it cleared, on activation (after init).
+                BOOL dark = FALSE;
+                ::DwmGetWindowAttribute(info->hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/,
+                                        &dark, sizeof(dark));
+                if (!dark && ::GetPropW(info->hwnd, L"umbra.capFix") == nullptr)
+                {
+                    ::SetPropW(info->hwnd, L"umbra.capFix", reinterpret_cast<HANDLE>(1));
+                    t_theming = true;
+                    umbra::setDarkTitleBarEx(info->hwnd, true);
+                    umbra::redrawWindowFrame(info->hwnd);
+                    t_theming = false;
+
+                    wchar_t cls[80] = L"?"; ::GetClassNameW(info->hwnd, cls, ARRAYSIZE(cls));
+                    wchar_t line[256];
+                    ::StringCchPrintfW(line, ARRAYSIZE(line),
+                                       L"WM_ACTIVATE re-assert dark caption (was cleared): %s\r\n", cls);
+                    Dbg(line);
+                }
             }
         }
         return ::CallNextHookEx(nullptr, code, wParam, lParam);
