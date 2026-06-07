@@ -4183,6 +4183,10 @@ namespace umbra
 	 * @see umbra::setListViewCtrlSubclass()
 	 * @see umbra::removeListViewCtrlSubclass()
 	 */
+	// Re-entry guard for the ListviewPopup phantom-hscroll kill in ListViewSubclass:
+	// ShowScrollBar re-enters WM_NCCALCSIZE, which would otherwise recurse.
+	static thread_local bool g_listViewHScrollFixActive = false;
+
 	static LRESULT CALLBACK ListViewSubclass(
 		HWND hWnd,
 		UINT uMsg,
@@ -4194,6 +4198,34 @@ namespace umbra
 	{
 		switch (uMsg)
 		{
+			case WM_NCCALCSIZE:
+			{
+				// Kill the phantom horizontal scrollbar the breadcrumb / autocomplete
+				// ListviewPopup leaves on its list after the dark-mode theme switch — visible
+				// but with no scroll range (GetScrollInfo: max-min < page), and unthemed until
+				// it is touched. Let the list compute its NC first, then hide the bar. Scoped
+				// to a ListviewPopup host + the no-range condition, so a list that genuinely
+				// scrolls horizontally keeps its bar; the guard stops the ShowScrollBar-driven
+				// WM_NCCALCSIZE from recursing (ShowScrollBar on an already-hidden bar is a
+				// harmless no-op, so no separate visible-state check is needed).
+				const LRESULT lr = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+				if (umbra::isEnabled() && !g_listViewHScrollFixActive)
+				{
+					SCROLLINFO si{};
+					si.cbSize = sizeof(si);
+					si.fMask = SIF_RANGE | SIF_PAGE;
+					if (::GetScrollInfo(hWnd, SB_HORZ, &si)
+						&& (si.nMax - si.nMin) < static_cast<int>(si.nPage)
+						&& CmpWndClassName(::GetParent(hWnd), L"ListviewPopup"))
+					{
+						g_listViewHScrollFixActive = true;
+						::ShowScrollBar(hWnd, SB_HORZ, FALSE);
+						g_listViewHScrollFixActive = false;
+					}
+				}
+				return lr;
+			}
+
 			case WM_NCDESTROY:
 			{
 				::RemoveWindowSubclass(hWnd, ListViewSubclass, uIdSubclass);
