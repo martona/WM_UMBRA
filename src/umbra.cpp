@@ -269,6 +269,7 @@ namespace umbra
 	static constexpr UINT_PTR kWindowNotifySubclassID           = 15;
 	static constexpr UINT_PTR kWindowMenuBarSubclassID          = 16;
 	static constexpr UINT_PTR kWindowSettingChangeSubclassID    = 17;
+	static constexpr UINT_PTR kAcluiCheckListSubclassID         = 18;
 
 	/**
 	 * @struct DarkModeParams
@@ -5333,6 +5334,80 @@ namespace umbra
 		}
 	}
 
+	// --- aclui CHECKLIST_ACLUI: owner-drawn Allow/Deny permissions list -------
+	// Reached by the child-walk but it paints its own body, and both the body and
+	// its label statics derive from COLOR_WINDOW / dialog faces that user32 resolves
+	// from the internal sys-color table — the process GetSysColor hook can't reach
+	// them, so they stay light. We darken the WHOLE field to the COLOR_WINDOW dark-
+	// equivalent (ctrlBackground): the body via WM_ERASEBKGND, and the child statics
+	// via WM_CTLCOLORSTATIC. Without the latter, aclui colours the statics dialog-
+	// dark (0x202020) and they read as black patches on the grey body.
+	static LRESULT CALLBACK AcluiCheckListSubclass(
+		HWND hWnd,
+		UINT uMsg,
+		WPARAM wParam,
+		LPARAM lParam,
+		UINT_PTR uIdSubclass,
+		[[maybe_unused]] DWORD_PTR dwRefData
+	)
+	{
+		switch (uMsg)
+		{
+			case WM_NCDESTROY:
+			{
+				::RemoveWindowSubclass(hWnd, AcluiCheckListSubclass, uIdSubclass);
+				break;
+			}
+
+			case WM_ERASEBKGND:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+
+				RECT rcClient{};
+				::GetClientRect(hWnd, &rcClient);
+				::FillRect(reinterpret_cast<HDC>(wParam), &rcClient, umbra::getCtrlBackgroundBrush());
+				return TRUE;
+			}
+
+			case WM_CTLCOLORSTATIC:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+
+				const bool isChildEnabled = ::IsWindowEnabled(reinterpret_cast<HWND>(lParam)) == TRUE;
+				auto hdc = reinterpret_cast<HDC>(wParam);
+				::SetTextColor(hdc, isChildEnabled ? umbra::getTextColor() : umbra::getDisabledTextColor());
+				::SetBkColor(hdc, umbra::getCtrlBackgroundColor());
+				return reinterpret_cast<LRESULT>(umbra::getCtrlBackgroundBrush());
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+		return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+	}
+
+	// Best-effort dark for CHECKLIST_ACLUI: DarkMode_Explorer (dark scroll bar and
+	// dark-aware bits) + the field subclass above (body and label statics → ctrlBackground).
+	static void setAcluiCheckListSubclassAndTheme(HWND hWnd, DarkModeParams p)
+	{
+		if (p._theme)
+		{
+			umbra::setDarkThemeExperimental(hWnd, L"DarkMode_Explorer");
+		}
+		if (p._subclass)
+		{
+			umbra::setSubclass(hWnd, AcluiCheckListSubclass, kAcluiCheckListSubclassID);
+		}
+	}
+
 	static BOOL CALLBACK DarkEnumChildProc(HWND hWnd, LPARAM lParam)
 	{
 		const auto& p = *reinterpret_cast<DarkModeParams*>(lParam);
@@ -5443,6 +5518,13 @@ namespace umbra
 		if (className == TRACKBAR_CLASS)
 		{
 			umbra::setTrackbarCtrlTheme(hWnd, p);
+			return TRUE;
+		}
+
+		// aclui's owner-drawn Allow/Deny permissions list (the Security dialog).
+		if (className == L"CHECKLIST_ACLUI")
+		{
+			umbra::setAcluiCheckListSubclassAndTheme(hWnd, p);
 			return TRUE;
 		}
 
