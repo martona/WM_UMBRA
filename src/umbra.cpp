@@ -5785,6 +5785,42 @@ namespace umbra
 		return false;
 	}
 
+	void paintDarkThemeEdge(HDC hdc, const wchar_t* classList, int partId, int stateId, const RECT& rc) noexcept
+	{
+		if (hdc == nullptr || classList == nullptr)
+			return;
+
+		// Tab items lose their themed border when darkThemeBackground flat-fills them (we
+		// override the whole DrawThemeBackground draw, edge included). Without it, adjacent
+		// inactive tabs merge into one strip and the selected tab — which shares the body
+		// colour so it can join the content — has no outline at all. Redraw a 1px edge: top
+		// and sides on every tab so neighbours separate and each reads as a tab; the bottom
+		// only on UNSELECTED tabs (TABP_TABITEM state != TIS_SELECTED=3), leaving the selected
+		// tab's bottom open so it still merges into the body below it.
+		if (std::wstring_view(classList) == L"Tab" && partId == 1)
+		{
+			const HPEN pen = umbra::getEdgePen();
+			if (pen == nullptr)
+				return;
+
+			const HGDIOBJ oldPen = ::SelectObject(hdc, pen);
+			const LONG l = rc.left;
+			const LONG t = rc.top;
+			const LONG r = rc.right - 1;
+
+			::MoveToEx(hdc, l, t, nullptr); ::LineTo(hdc, rc.right, t);    // top
+			::MoveToEx(hdc, l, t, nullptr); ::LineTo(hdc, l, rc.bottom);   // left
+			::MoveToEx(hdc, r, t, nullptr); ::LineTo(hdc, r, rc.bottom);   // right
+			if (stateId != 3)                                             // bottom (skip the selected tab)
+			{
+				const LONG b = rc.bottom - 1;
+				::MoveToEx(hdc, l, b, nullptr); ::LineTo(hdc, rc.right, b);
+			}
+
+			::SelectObject(hdc, oldPen);
+		}
+	}
+
 	void setChildCtrlsTheme(HWND hParent)
 	{
 #if defined(_DARKMODE_SUPPORT_OLDER_OS)

@@ -352,6 +352,23 @@ namespace umbra
 	 */
 	[[nodiscard]] bool darkThemeColor(const wchar_t* classList, int partId, int stateId, int propId, HRESULT inHr, COLORREF& outColor) noexcept;
 
+	/**
+	 * @brief Redraws the edges UMBRA's flat-fill drops, for a themed part it overrides.
+	 *
+	 * @ref darkThemeBackground replaces a whole `DrawThemeBackground[Ex]` draw with a flat
+	 * fill — which also erases the border uxtheme would have drawn. For tab items that border
+	 * carries the shape (separating adjacent tabs, outlining the active one), so an
+	 * application's uxtheme hook should call this right after applying the flat fill, on the
+	 * same `HDC`/rect, to paint a dark 1px edge back. No-op for parts that need no edge.
+	 *
+	 * @param hdc       Target device context (the one passed to `DrawThemeBackground[Ex]`).
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `DrawThemeBackground`.
+	 * @param stateId   The state id from `DrawThemeBackground`.
+	 * @param rc        The rectangle the part was drawn into.
+	 */
+	void paintDarkThemeEdge(HDC hdc, const wchar_t* classList, int partId, int stateId, const RECT& rc) noexcept;
+
 	// ========================================================================
 	// Enhancements to DarkMode.h
 	// ========================================================================

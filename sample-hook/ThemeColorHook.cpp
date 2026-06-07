@@ -335,6 +335,7 @@ namespace
         if (pRect != nullptr && umbra::darkThemeBackground(cls.c_str(), iPartId, iStateId, fill))
         {
             ::FillRect(hdc, pRect, BrushFor(fill));
+            umbra::paintDarkThemeEdge(hdc, cls.c_str(), iPartId, iStateId, *pRect);
             return S_OK;
         }
         return g_realDrawThemeBackground(hTheme, hdc, iPartId, iStateId, pRect, pClipRect);
@@ -350,6 +351,7 @@ namespace
         if (pRect != nullptr && umbra::darkThemeBackground(cls.c_str(), iPartId, iStateId, fill))
         {
             ::FillRect(hdc, pRect, BrushFor(fill));
+            umbra::paintDarkThemeEdge(hdc, cls.c_str(), iPartId, iStateId, *pRect);
             return S_OK;
         }
         return g_realDrawThemeBackgroundEx(hTheme, hdc, iPartId, iStateId, pRect, pOptions);
