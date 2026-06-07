@@ -99,6 +99,7 @@
     <ClCompile Include="createwlog.cpp" />
     <ClCompile Include="ProcessColorHook.cpp" />
     <ClCompile Include="AutoDarkMode.cpp" />
+    <ClCompile Include="ThemeColorHook.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="hook.rc" />

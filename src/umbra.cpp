@@ -72,6 +72,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "DarkMode.h"
 #include "UAHMenuBar.h"
@@ -5528,6 +5529,24 @@ namespace umbra
 			return TRUE;
 		}
 
+		// File-dialog / Explorer address & search band custom windows. These paint
+		// their own COLOR_WINDOW (white) background — no uxtheme or GetSysColor hook
+		// sees it — but they ARE real windows the auto-dark hook reaches on WM_CREATE.
+		// setDarkWndNotifySafe gives them ctl-color + child theming but no erase fill,
+		// so add a dark WM_ERASEBKGND fill (as for CHECKLIST_ACLUI). "Address Band Root"
+		// is the sliver just left of the breadcrumb.
+		if (className == L"_SearchEditBoxFakeWindow"
+			|| className == L"Search Box"
+			|| className == L"SearchEditBoxWrapperClass"
+			|| className == L"Address Band Root")
+		{
+			if (p._subclass)
+			{
+				umbra::setWindowEraseBgSubclass(hWnd);
+			}
+			return TRUE;
+		}
+
 #if 0 // for debugging
 		if (className == L"#32770") // dialog
 		{
@@ -5632,6 +5651,38 @@ namespace umbra
 
 		default:                          return false;
 		}
+	}
+
+	// Counterpart to darkSysColor for uxtheme background drawing: decides whether to
+	// replace a DrawThemeBackground[Ex] themed part with a flat dark fill, for DUI
+	// bands uxtheme paints light (no dark variant). Targeted by class — only pure
+	// background bands whose foreground text is already light, so a flat fill needs
+	// no companion text override. Expanded from the DrawThemeBackground parts the
+	// umbra-hook harness logs.
+	bool darkThemeBackground(const wchar_t* classList, int partId,
+	                         [[maybe_unused]] int stateId, COLORREF& outFill) noexcept
+	{
+		if (classList == nullptr)
+			return false;
+
+		const std::wstring_view cls(classList);
+		const COLORREF dark = umbra::getBackgroundColor();
+
+		// Explorer / file-dialog top strip (the address + search band). The harness's
+		// DrawThemeBackground log shows it is a composite painted from several light
+		// theme parts with no dark variant: the rebar band itself, the address box,
+		// and the search box. Flat-fill each so the whole strip reads dark; their text
+		// is drawn light, so no companion text override is needed. We deliberately
+		// skip the glyph parts (SearchBox part 3) and the nav buttons (Navigation).
+		//   Rebar: part 3 = RP_BAND, part 6 = RP_BACKGROUND.
+		if (cls == L"Rebar" && (partId == 3 || partId == 6))         { outFill = dark; return true; }
+		if (cls == L"AddressBand" && partId == 1)                    { outFill = dark; return true; }
+		if (cls == L"SearchBoxComposited::SearchBox" && partId == 1) { outFill = dark; return true; }
+
+		// Color-queried but never drawn in testing; harmless to keep as a known band.
+		if (cls == L"Communications::Rebar")                         { outFill = dark; return true; }
+
+		return false;
 	}
 
 	void setChildCtrlsTheme(HWND hParent)

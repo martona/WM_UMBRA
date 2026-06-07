@@ -46,8 +46,9 @@ namespace
     HWND g_hToolbar = nullptr;
     HWND g_hPages[4]{};
     int  g_modeId   = IDM_MODE_DARK;   // which palette the color hook serves
-    bool g_hookOn   = false;           // is the GetSysColor hook installed (runtime-toggleable)
-    bool g_themeOn  = false;           // is the uxtheme hook installed (fixed at startup)
+    bool g_hookOn       = false;       // GetSysColor/Brush hook installed (runtime-toggleable)
+    bool g_themeColorOn = false;       // uxtheme GetThemeColor probe installed (startup)
+    bool g_themeOn      = false;       // auto dark-mode per-window hook installed (startup)
 
     struct PageDef { int templ; DLGPROC proc; const wchar_t* label; };
     const PageDef kPages[4] = {
@@ -85,9 +86,12 @@ namespace
     {
         if (g_hStatus != nullptr)
         {
-            wchar_t buf[160];
-            ::wsprintfW(buf, L"Palette: %s   \x00B7   Color hook: %s   \x00B7   Auto-theme: %s",
-                PaletteLabel(), g_hookOn ? L"ON" : L"OFF", g_themeOn ? L"ON" : L"OFF");
+            wchar_t buf[200];
+            ::wsprintfW(buf, L"Palette: %s   \x00B7   Color: %s   \x00B7   Theme: %s   \x00B7   Auto: %s",
+                PaletteLabel(),
+                g_hookOn ? L"ON" : L"OFF",
+                g_themeColorOn ? L"ON" : L"OFF",
+                g_themeOn ? L"ON" : L"OFF");
             ::SendMessageW(g_hStatus, SB_SETTEXTW, 1, reinterpret_cast<LPARAM>(buf));
         }
     }
@@ -317,7 +321,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
     // dark — before any window or extra thread exists.
     umbra::initDarkMode();
     ApplyPalette(IDM_MODE_DARK);
-    g_hookOn = setProcessWideColorHook();   // classic + DirectUI color residue
+    g_hookOn = setProcessWideColorHook();              // classic + DirectUI color residue
+    g_themeColorOn = setProcessWideThemeColorHook();   // uxtheme GetThemeColor probe (DUI residue; logs themecolor.log)
 
     // Install auto-theming while this is still the ONLY thread: the current-thread
     // WH_CALLWNDPROCRET hook + a CreateThread detour together cover every thread
@@ -333,6 +338,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
     if (hDlg == nullptr)
     {
         unsetAutoDarkMode();
+        unsetProcessWideThemeColorHook();
         unsetProcessWideColorHook();
         if (SUCCEEDED(hrCo)) ::CoUninitialize();
         return 1;
@@ -351,6 +357,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow)
     }
 
     unsetAutoDarkMode();
+    unsetProcessWideThemeColorHook();
     unsetProcessWideColorHook();
     StopCreateWindowLog();
     if (SUCCEEDED(hrCo)) ::CoUninitialize();

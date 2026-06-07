@@ -82,6 +82,7 @@ if(UMBRA_BUILD_SAMPLE)
         sample-hook/createwlog.cpp
         sample-hook/ProcessColorHook.cpp
         sample-hook/AutoDarkMode.cpp
+        sample-hook/ThemeColorHook.cpp
         sample-hook/hook.rc)
     target_link_libraries(umbra-hook PRIVATE umbra ole32 shell32 comdlg32 "${DETOURS_LIBRARY}")
     target_include_directories(umbra-hook PRIVATE "${DETOURS_INCLUDE_DIR}")

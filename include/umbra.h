@@ -308,6 +308,27 @@ namespace umbra
 	 */
 	[[nodiscard]] bool darkSysColor(int nIndex, COLORREF& outColor) noexcept;
 
+	/**
+	 * @brief Decides UMBRA's flat-dark override for a uxtheme background draw.
+	 *
+	 * The DrawThemeBackground analogue of @ref darkSysColor: some DUI band
+	 * backgrounds (e.g. the file-dialog address/search rebar) are painted by
+	 * uxtheme from a theme part with no dark variant, so they show as light
+	 * "splotches" that no colour query can reach. Given the theme class / part /
+	 * state a caller asked `DrawThemeBackground[Ex]` to paint, this reports whether
+	 * UMBRA wants to replace that themed part with a flat dark fill and, if so, the
+	 * fill colour. The uxtheme interception is an application concern (see the
+	 * `umbra-hook` harness); the library keeps only the decision.
+	 *
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `DrawThemeBackground`.
+	 * @param stateId   The state id from `DrawThemeBackground`.
+	 * @param outFill   Receives the flat fill colour when overridden.
+	 * @return `true` (writing @p outFill) if UMBRA overrides this background;
+	 *         `false` otherwise.
+	 */
+	[[nodiscard]] bool darkThemeBackground(const wchar_t* classList, int partId, int stateId, COLORREF& outFill) noexcept;
+
 	// ========================================================================
 	// Enhancements to DarkMode.h
 	// ========================================================================
