@@ -121,10 +121,7 @@ void StartCreateWindowLog()
         return;
 
     wchar_t path[MAX_PATH];
-    const DWORD len = ::GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
-    for (DWORD i = len; i > 0; --i)
-        if (path[i - 1] == L'\\') { path[i] = L'\0'; break; }
-    ::StringCchCatW(path, ARRAYSIZE(path), L"createwlog.txt");
+    umbraLogPath(L"createwlog.txt", path, ARRAYSIZE(path));
 
     g_log = ::CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
         nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

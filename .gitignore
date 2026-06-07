@@ -371,6 +371,7 @@ FodyWeavers.xsd
 /.vscode/
 /build/
 /log/
+/logs/
 /backup/
 
 # vcpkg manifest-mode install tree (Detours, etc.)

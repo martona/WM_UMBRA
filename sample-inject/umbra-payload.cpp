@@ -40,7 +40,7 @@ namespace
     thread_local bool t_threadHooked = false;         // CALLWNDPROC[RET] installed on this thread?
     thread_local bool t_theming      = false;         // re-entrancy guard (theming sends messages)
 
-    // ---- TEMP DIAGNOSTIC: top-level theming trace -> <target dir>\umbra-inject.log ----
+    // ---- TEMP DIAGNOSTIC: top-level theming trace -> <repo>\logs\umbra-inject.log ----
     HANDLE           g_dbg     = INVALID_HANDLE_VALUE;
     CRITICAL_SECTION g_dbgCs{};
     INIT_ONCE        g_dbgOnce = INIT_ONCE_STATIC_INIT;
@@ -50,13 +50,11 @@ namespace
 
     BOOL CALLBACK DbgInitOnce(PINIT_ONCE, PVOID, PVOID*) noexcept
     {
-        // TEMP: hardcoded + append. The old <module dir> path resolves to C:\Windows for
-        // regedit/explorer — only an *elevated* process can write there, so explorer
-        // (medium integrity) silently failed to log. FILE_APPEND_DATA so a crash-and-restart
-        // explorer (and the global hook's other processes) don't truncate the capture; just
-        // delete the file for a clean run.
-        const wchar_t* path =
-            L"C:\\Users\\Marton\\Desktop\\github\\WM_UMBRA\\build\\Debug\\x64\\umbra-inject.log";
+        // One fixed repo log dir (see umbraLogPath in hook.h). FILE_APPEND_DATA so the global
+        // hook's several processes — and a crash-and-restart — append rather than truncate each
+        // other's capture; just delete the file for a clean run.
+        wchar_t path[MAX_PATH];
+        umbraLogPath(L"umbra-inject.log", path, ARRAYSIZE(path));
         g_dbg = ::CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         ::InitializeCriticalSection(&g_dbgCs);

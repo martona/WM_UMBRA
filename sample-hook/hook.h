@@ -1,7 +1,27 @@
 #pragma once
 #include <windows.h>
+#include <strsafe.h>
 
 // Shared across the umbra-hook translation units.
+
+// --- Diagnostic logs: one fixed location ----------------------------------
+// Every harness/payload diagnostic log (umbra-inject.log, themecolor.log, autodark.log,
+// createwlog.txt) goes to ONE hardcoded directory under the repo, so they never scatter
+// across module dirs. The old <module dir> path resolved to C:\Windows / system32 for an
+// injected regedit/mmc/explorer — which a medium-integrity process can't even write — so
+// logs silently vanished or landed somewhere you had to hunt for. A repo path under the
+// user profile is writable by both elevated and medium-integrity targets. Hardcoded by
+// design: throwaway diagnostic plumbing that never ships. Delete the files for a clean run.
+inline constexpr const wchar_t* kUmbraLogDir =
+    L"C:\\Users\\Marton\\Desktop\\github\\WM_UMBRA\\logs";
+
+// Composes "<kUmbraLogDir>\<fileName>" into `out`, creating the directory if needed.
+// `out` is always left a valid (possibly truncated) string; returns false only if too small.
+inline bool umbraLogPath(const wchar_t* fileName, wchar_t* out, size_t outCount) noexcept
+{
+    (void)::CreateDirectoryW(kUmbraLogDir, nullptr);   // succeeds, or already exists
+    return SUCCEEDED(::StringCchPrintfW(out, outCount, L"%s\\%s", kUmbraLogDir, fileName));
+}
 
 extern HINSTANCE g_hInst;
 
