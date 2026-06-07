@@ -6321,7 +6321,15 @@ namespace umbra
 		::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_GETBUTTONINFO, lptbcd->nmcd.dwItemSpec, reinterpret_cast<LPARAM>(&tbi));
 
 		const bool isIcon = tbi.iImage != I_IMAGENONE;
-		const bool isDropDown = ((tbi.fsStyle & BTNS_DROPDOWN) == BTNS_DROPDOWN) && isIcon; // has 2 "buttons"
+		// A BTNS_DROPDOWN button only shows a *separate* arrow (the split "two buttons" look) when
+		// the toolbar sets TBSTYLE_EX_DRAWDDARROWS; without it the WHOLE button drops down and the
+		// system draws NO arrow. We redraw the system's arrow dark in postpaint — we must not
+		// invent one, or a plain dropdown toolbar (e.g. mmc's menu band: File/Action/View) reads
+		// as a row of comboboxes. Gate on the toolbar's extended style so we only split + redraw
+		// where the system itself draws the arrow.
+		const LRESULT tbExStyle = ::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_GETEXTENDEDSTYLE, 0, 0);
+		const bool drawsDDArrow = (tbExStyle & TBSTYLE_EX_DRAWDDARROWS) != 0;
+		const bool isDropDown = drawsDDArrow && ((tbi.fsStyle & BTNS_DROPDOWN) == BTNS_DROPDOWN) && isIcon; // split: 2 "buttons"
 		if (isDropDown)
 		{
 			const auto idx = ::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_COMMANDTOINDEX, lptbcd->nmcd.dwItemSpec, 0);
