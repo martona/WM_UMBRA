@@ -559,6 +559,15 @@ namespace umbra
 	/// Removes the subclass used for `WM_ERASEBKGND` message handling.
 	void removeWindowEraseBgSubclass(HWND hWnd);
 
+	/// Applies the dialog client backfill subclass: after the dialog paints, re-fills the
+	/// client (clipping visible children) with the dark dialog brush. For dialogs that fill
+	/// their background from a cached/private brush in `WM_PAINT` — the classic MessageBox
+	/// button band — which no erase/ctl-color subclass or colour/theme hook can reach. Install
+	/// OUTERMOST (after the erase/ctl-color subclasses) so its `WM_PAINT` runs first.
+	void setWindowBackfillSubclass(HWND hWnd);
+	/// Removes the dialog client backfill subclass.
+	void removeWindowBackfillSubclass(HWND hWnd);
+
 	/// Applies window subclassing to handle `WM_CTLCOLOR*` messages.
 	void setWindowCtlColorSubclass(HWND hWnd);
 	/// Removes the subclass used for `WM_CTLCOLOR*` messages handling.

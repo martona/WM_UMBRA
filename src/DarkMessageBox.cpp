@@ -32,150 +32,6 @@
 
 namespace
 {
-    constexpr UINT_PTR kMsgBoxBackfillSubclassId = 0x44524B31; // arbitrary unique id
-
-    bool MessageBoxShouldBeDark()
-    {
-        return umbra::isEnabled() &&
-            umbra::isColorDark(umbra::getDlgBackgroundColor());
-    }
-
-    struct ExcludeChildrenCtx
-    {
-        HWND hwndParent;
-        HDC  hdc;
-    };
-
-    BOOL CALLBACK ExcludeVisibleChildFromClip(HWND hwndChild, LPARAM param)
-    {
-        auto* ctx = reinterpret_cast<ExcludeChildrenCtx*>(param);
-
-        if (!::IsWindowVisible(hwndChild))
-            return TRUE;
-
-        RECT rcScreen{};
-        if (!::GetWindowRect(hwndChild, &rcScreen))
-            return TRUE;
-
-        POINT pts[2] =
-        {
-            { rcScreen.left,  rcScreen.top    },
-            { rcScreen.right, rcScreen.bottom }
-        };
-
-        ::MapWindowPoints(nullptr, ctx->hwndParent, pts, 2);
-
-        ::ExcludeClipRect(
-            ctx->hdc,
-            pts[0].x,
-            pts[0].y,
-            pts[1].x,
-            pts[1].y);
-
-        return TRUE;
-    }
-
-    void FillMessageBoxClientBackground(HWND hwnd, HDC hdc, bool excludeChildren)
-    {
-        if (!hwnd || !hdc)
-            return;
-
-        RECT rcClient{};
-        ::GetClientRect(hwnd, &rcClient);
-
-        const int saved = ::SaveDC(hdc);
-
-        if (excludeChildren && saved != 0)
-        {
-            ExcludeChildrenCtx ctx{ hwnd, hdc };
-            ::EnumChildWindows(
-                hwnd,
-                ExcludeVisibleChildFromClip,
-                reinterpret_cast<LPARAM>(&ctx));
-        }
-
-        ::FillRect(hdc, &rcClient, umbra::getDlgBackgroundBrush());
-
-        if (saved != 0)
-            ::RestoreDC(hdc, saved);
-    }
-
-    LRESULT CALLBACK MessageBoxBackfillSubclass(
-        HWND hwnd,
-        UINT msg,
-        WPARAM wp,
-        LPARAM lp,
-        UINT_PTR subclassId,
-        DWORD_PTR)
-    {
-        switch (msg)
-        {
-        case WM_NCDESTROY:
-            ::RemoveWindowSubclass(hwnd, MessageBoxBackfillSubclass, subclassId);
-            break;
-
-        case WM_ERASEBKGND:
-            if (MessageBoxShouldBeDark())
-            {
-                // During erase, fill everything. Child windows will paint afterward.
-                FillMessageBoxClientBackground(
-                    hwnd,
-                    reinterpret_cast<HDC>(wp),
-                    false);
-
-                return TRUE;
-            }
-            break;
-
-        case WM_CTLCOLORMSGBOX:
-        case WM_CTLCOLORDLG:
-            if (MessageBoxShouldBeDark())
-                return umbra::onCtlColorDlg(reinterpret_cast<HDC>(wp));
-            break;
-
-        case WM_CTLCOLORSTATIC:
-            if (MessageBoxShouldBeDark())
-            {
-                HWND hwndChild = reinterpret_cast<HWND>(lp);
-
-                return umbra::onCtlColorDlgStaticText(
-                    reinterpret_cast<HDC>(wp),
-                    ::IsWindowEnabled(hwndChild) == TRUE);
-            }
-            break;
-
-        case WM_PAINT:
-            if (MessageBoxShouldBeDark())
-            {
-                // Let MessageBox do its normal painting first.
-                const LRESULT ret = ::DefSubclassProc(hwnd, msg, wp, lp);
-
-                // Then nuke the leftover light client background.
-                // Clip children so the buttons, icon, and text are not painted over.
-                HDC hdc = ::GetDC(hwnd);
-                if (hdc)
-                {
-                    FillMessageBoxClientBackground(hwnd, hdc, true);
-                    ::ReleaseDC(hwnd, hdc);
-                }
-
-                return ret;
-            }
-            break;
-        }
-
-        return ::DefSubclassProc(hwnd, msg, wp, lp);
-    }
-
-    void InstallMessageBoxBackfillSubclass(HWND hwnd)
-    {
-        ::SetWindowSubclass(
-            hwnd,
-            MessageBoxBackfillSubclass,
-            kMsgBoxBackfillSubclassId,
-            0);
-    }
-
     thread_local HHOOK g_msgBoxHook = nullptr;
     thread_local bool  g_msgBoxDarkened = false;
 
@@ -204,9 +60,9 @@ namespace
         // Disable any themed dialog texture nonsense.
         umbra::enableThemeDialogTexture(hwnd, false);
 
-        // Must be installed after the umbra subclasses.
-        // This lets our WM_PAINT call DefSubclassProc() first, then backfill.
-        InstallMessageBoxBackfillSubclass(hwnd);
+        // Must be installed after the umbra subclasses (outermost): this lets the
+        // backfill's WM_PAINT run DefSubclassProc() first, then fill the leftover band.
+        umbra::setWindowBackfillSubclass(hwnd);
 
         ::RedrawWindow(
             hwnd,

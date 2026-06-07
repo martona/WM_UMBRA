@@ -100,6 +100,7 @@ namespace
         const wchar_t* name = (n != 0 && n < ARRAYSIZE(path)) ? BaseName(path) : L"";
         g_isTarget = SameI(name, L"regedit.exe")  || 
                      SameI(name, L"regedt32.exe") ||
+//                   SameI(name, L"umbra-sample.exe") ||
 //                   SameI(name, L"explorer.exe") ||
                      SameI(name, L"mmc.exe");
     }
@@ -212,6 +213,44 @@ namespace
         return false;
     }
 
+    // EnumChildWindows callback: clear the flag (and stop) on the first child that is
+    // neither a static nor a button.
+    BOOL CALLBACK MsgBoxShapeProc(HWND child, LPARAM param)
+    {
+        wchar_t cls[32];
+        if (::GetClassNameW(child, cls, ARRAYSIZE(cls)) == 0)
+            return TRUE;
+        const bool staticOrButton =
+            ::CompareStringOrdinal(cls, -1, WC_STATIC, -1, TRUE) == CSTR_EQUAL ||
+            ::CompareStringOrdinal(cls, -1, WC_BUTTON, -1, TRUE) == CSTR_EQUAL;
+        if (!staticOrButton)
+        {
+            *reinterpret_cast<bool*>(param) = false;
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    // A classic MessageBox is a #32770 whose only children are static text/icon and push
+    // buttons — no Edit/Combo/List/Tab/etc. Its lower button band is filled from a private
+    // brush in WM_PAINT that no colour/theme hook reaches, so it needs umbra's client
+    // backfill — but the backfill clips only child HWNDs, so on a dialog that paints content
+    // straight onto its own surface (a wizard / property-sheet header band) it would blank
+    // that content. Scoping to message-box shape keeps the backfill where it is safe. The
+    // children exist by WM_INITDIALOG (not yet at WM_CREATE), so classify there.
+    bool IsMessageBoxShaped(HWND hwnd)
+    {
+        wchar_t cls[16];
+        if (::GetClassNameW(hwnd, cls, ARRAYSIZE(cls)) == 0)
+            return false;
+        if (::CompareStringOrdinal(cls, -1, L"#32770", -1, TRUE) != CSTR_EQUAL)
+            return false;
+
+        bool onlyStaticButton = true;
+        ::EnumChildWindows(hwnd, MsgBoxShapeProc, reinterpret_cast<LPARAM>(&onlyStaticButton));
+        return onlyStaticButton;
+    }
+
     // Per-window theming — identical to sample-hook's AutoDarkMode, minus the EXE-only
     // self-hook/CreateThread machinery (the CBT bootstrap below replaces it).
     LRESULT CALLBACK CallWndProc(int code, WPARAM wParam, LPARAM lParam)
@@ -237,6 +276,7 @@ namespace
                 umbra::removeWindowNotifyCustomDrawSubclass(info->hwnd);
                 umbra::removeWindowMenuBarSubclass(info->hwnd);
                 umbra::removeWindowEraseBgSubclass(info->hwnd);
+                umbra::removeWindowBackfillSubclass(info->hwnd);
             }
         }
         return ::CallNextHookEx(nullptr, code, wParam, lParam);
@@ -259,6 +299,16 @@ namespace
                     umbra::applyDarkToNewWindow(info->hwnd);
                 t_theming = false;
                 LogThemedWindow(info->hwnd);                     // TEMP DIAGNOSTIC
+            }
+            else if (info->message == WM_INITDIALOG && info->hwnd != nullptr
+                     && !IsThemingBlacklisted(info->hwnd)
+                     && IsMessageBoxShaped(info->hwnd))
+            {
+                // Classic MessageBox: scope umbra's client backfill to message-box-shaped
+                // dialogs (their children exist now, not yet at WM_CREATE). Installed here,
+                // after the WM_CREATE applyDarkToNewWindow pass, so it sits OUTERMOST and its
+                // WM_PAINT runs DefSubclassProc first, then fills the leftover light button band.
+                umbra::setWindowBackfillSubclass(info->hwnd);
             }
             else if (info->message == WM_ACTIVATE && info->hwnd != nullptr
                      && (::GetWindowLongPtrW(info->hwnd, GWL_STYLE) & WS_CHILD) == 0

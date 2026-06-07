@@ -271,6 +271,7 @@ namespace umbra
 	static constexpr UINT_PTR kWindowMenuBarSubclassID          = 16;
 	static constexpr UINT_PTR kWindowSettingChangeSubclassID    = 17;
 	static constexpr UINT_PTR kAcluiCheckListSubclassID         = 18;
+	static constexpr UINT_PTR kWindowBackfillSubclassID         = 19;
 
 	/**
 	 * @struct DarkModeParams
@@ -5753,8 +5754,30 @@ namespace umbra
 			return true;
 		}
 		if (cls == L"Header" && (partId == 0 || partId == 1 || partId == 2))
-			{ outFill = dark; return true; }
+		{
+			outFill = dark;
+			return true;
+		}
 
+		// comctl32 TaskDialog — the modern "message box" (regedit's delete-key confirm,
+		// shell error prompts). comctl draws the whole body from two TaskDialog panels with
+		// no dark variant, so uxtheme paints them light: PRIMARYPANEL (part 1) is the entire
+		// client, SECONDARYPANEL (part 8) the button footer. Flat-fill both to the dialog
+		// background. The panel text is comctl-drawn near-black, so it needs the companion
+		// override in darkThemeColor (TaskDialogStyle) to stay readable on the dark fill.
+		if (cls == L"TaskDialog")
+		{
+			if (partId == 1)
+			{
+				outFill = umbra::getCtrlBackgroundColor(); 
+				return true;
+			}
+			else if (partId == 8)
+			{
+				outFill = umbra::getDlgBackgroundColor(); 
+				return true;
+			}
+		}
 		return false;
 	}
 
@@ -5769,9 +5792,23 @@ namespace umbra
 	// actually provides — so this fills the hole without disturbing working text. Not gated
 	// by class: supplying the palette's view-text colour wherever a list item has no themed
 	// text colour is correct in any mode (getViewTextColor tracks the light/dark palette).
-	bool darkThemeColor(const wchar_t* /*classList*/, int partId, int stateId, int propId,
+	bool darkThemeColor(const wchar_t* classList, int partId, int stateId, int propId,
 	                    HRESULT inHr, COLORREF& outColor) noexcept
 	{
+		// comctl32 TaskDialog text. Once darkThemeBackground flat-fills the TaskDialog panels,
+		// the body / footnote / verification text — which the theme defines as near-black via a
+		// SUCCESSFUL GetThemeColor — would draw black-on-dark. Override TaskDialogStyle's text
+		// colour (TMT_TEXTCOLOR=3803) to the palette text colour; keep the main-instruction pane
+		// (part 2 = MAININSTRUCTIONPANE, the blue title) as the link/accent colour. This is the
+		// one place we override a query that SUCCEEDED — the theme's own colour is wrong against
+		// our dark fill, unlike the failing-query hole patched below.
+		if (classList != nullptr && std::wstring_view(classList) == L"TaskDialogStyle"
+		    && propId == 3803 /*TMT_TEXTCOLOR*/)
+		{
+			outColor = (partId == 2) ? umbra::getLinkTextColor() : umbra::getTextColor();
+			return true;
+		}
+
 		if (SUCCEEDED(inHr))
 			return false;
 
@@ -5911,6 +5948,155 @@ namespace umbra
 	void removeWindowEraseBgSubclass(HWND hWnd)
 	{
 		umbra::removeSubclass(hWnd, WindowEraseBgSubclass, kWindowEraseBgSubclassID);
+	}
+
+	// ---- Dialog client backfill (the message-box button band) ---------------
+	// A classic MessageBox — and shell dialogs shaped like one — fills its client
+	// background from a cached/private brush during WM_PAINT, not via WM_ERASEBKGND,
+	// WM_CTLCOLOR*, a system-colour brush, or a uxtheme part. So neither the erase
+	// subclass, the ctl-color subclass, the GetSysColor hook, nor the uxtheme hook can
+	// reach it, and the lower button band stays light on a dark dialog. This subclass
+	// lets the dialog paint normally, then re-fills the client — clipping the visible
+	// children so the icon, text, and buttons survive — with the dark dialog brush.
+	// Install it OUTERMOST (after the erase/ctl-color subclasses) so its WM_PAINT runs
+	// DefSubclassProc first and backfills only what the dialog left light.
+
+	struct BackfillExcludeCtx
+	{
+		HWND hwndParent;
+		HDC  hdc;
+	};
+
+	static BOOL CALLBACK BackfillExcludeVisibleChild(HWND hwndChild, LPARAM param)
+	{
+		auto* ctx = reinterpret_cast<BackfillExcludeCtx*>(param);
+
+		if (::IsWindowVisible(hwndChild) == FALSE)
+			return TRUE;
+
+		RECT rcScreen{};
+		if (::GetWindowRect(hwndChild, &rcScreen) == FALSE)
+			return TRUE;
+
+		POINT pts[2] =
+		{
+			{ rcScreen.left,  rcScreen.top    },
+			{ rcScreen.right, rcScreen.bottom }
+		};
+
+		::MapWindowPoints(nullptr, ctx->hwndParent, pts, 2);
+		::ExcludeClipRect(ctx->hdc, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+		return TRUE;
+	}
+
+	static void FillDialogClientBackground(HWND hWnd, HDC hdc, bool excludeChildren)
+	{
+		if (hWnd == nullptr || hdc == nullptr)
+			return;
+
+		RECT rcClient{};
+		::GetClientRect(hWnd, &rcClient);
+
+		const int saved = ::SaveDC(hdc);
+
+		if (excludeChildren && saved != 0)
+		{
+			BackfillExcludeCtx ctx{ hWnd, hdc };
+			::EnumChildWindows(hWnd, BackfillExcludeVisibleChild, reinterpret_cast<LPARAM>(&ctx));
+		}
+
+		::FillRect(hdc, &rcClient, umbra::getDlgBackgroundBrush());
+
+		if (saved != 0)
+			::RestoreDC(hdc, saved);
+	}
+
+	static LRESULT CALLBACK WindowBackfillSubclass(
+		HWND hWnd,
+		UINT uMsg,
+		WPARAM wParam,
+		LPARAM lParam,
+		UINT_PTR uIdSubclass,
+		[[maybe_unused]] DWORD_PTR dwRefData
+	)
+	{
+		switch (uMsg)
+		{
+			case WM_NCDESTROY:
+			{
+				::RemoveWindowSubclass(hWnd, WindowBackfillSubclass, uIdSubclass);
+				break;
+			}
+
+			case WM_ERASEBKGND:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				// Fill the whole client now; the children repaint over it afterwards.
+				FillDialogClientBackground(hWnd, reinterpret_cast<HDC>(wParam), false);
+				return TRUE;
+			}
+
+			case WM_CTLCOLORMSGBOX:
+			case WM_CTLCOLORDLG:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				return umbra::onCtlColorDlg(reinterpret_cast<HDC>(wParam));
+			}
+
+			case WM_CTLCOLORSTATIC:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				return umbra::onCtlColorDlgStaticText(
+					reinterpret_cast<HDC>(wParam),
+					::IsWindowEnabled(reinterpret_cast<HWND>(lParam)) == TRUE);
+			}
+
+			case WM_PAINT:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				// Let the dialog do its normal paint, then nuke the leftover light client
+				// fill. Clip the children so icon, text, and buttons are not painted over.
+				const LRESULT ret = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+
+				const HDC hdc = ::GetDC(hWnd);
+				if (hdc != nullptr)
+				{
+					FillDialogClientBackground(hWnd, hdc, true);
+					::ReleaseDC(hWnd, hdc);
+				}
+				return ret;
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+		return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+	}
+
+	/// Applies the dialog client backfill subclass (message-box button band).
+	void setWindowBackfillSubclass(HWND hWnd)
+	{
+		umbra::setSubclass(hWnd, WindowBackfillSubclass, kWindowBackfillSubclassID);
+	}
+
+	/// Removes the dialog client backfill subclass.
+	void removeWindowBackfillSubclass(HWND hWnd)
+	{
+		umbra::removeSubclass(hWnd, WindowBackfillSubclass, kWindowBackfillSubclassID);
 	}
 
 	/**
