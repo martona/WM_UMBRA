@@ -117,6 +117,18 @@ void unsetAutoDarkMode() noexcept;
 bool setProcessWideThemeColorHook() noexcept;
 void unsetProcessWideThemeColorHook() noexcept;
 
+// dui70 DirectUI::Element::PaintBackground inline hook (Detours). DUI element backgrounds
+// (the Control Panel header/sidebar, ...) are filled HERE — before the offscreen memory-DC
+// composite — so this reaches surfaces uxtheme hooks miss (not a DrawThemeBackground draw)
+// and window-level erase/backfill can't hold (the buffer blits over them). The member is
+// NON-exported: the host (umbra-inject.exe) resolves its RVA via symbols and passes it in through
+// the DLL's exported UmbraSetDuiPaintBg() (a shared section carries it to every injected copy);
+// the payload adds the live dui70 base and attaches. Returns true once attached; a cheap
+// no-op ("or not, as the case may be") if the host gave no RVA / it mismatched, and a transient
+// false (retry on a later window-creation) while dui70 is not yet loaded in this process. TEMP.
+bool setProcessWideDuiPaintHook() noexcept;
+void unsetProcessWideDuiPaintHook() noexcept;
+
 // --- THROWAWAY: CreateWindowEx creation logger (createwlog.cpp) -------------
 void StartCreateWindowLog();
 void StopCreateWindowLog();

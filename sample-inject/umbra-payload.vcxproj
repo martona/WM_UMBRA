@@ -95,6 +95,10 @@
          land in both): GetSysColor + uxtheme inline hooks. -->
     <ClCompile Include="..\sample-hook\ProcessColorHook.cpp" />
     <ClCompile Include="..\sample-hook\ThemeColorHook.cpp" />
+    <!-- dui70 DirectUI::Element::PaintBackground hook (host resolves its RVA via symbols).
+         Inject-only, so it lives HERE — not in sample-hook like the genuinely-shared
+         ProcessColorHook/ThemeColorHook: the in-process umbra-hook has no host to resolve it. -->
+    <ClCompile Include="DuiPaintHook.cpp" />
   </ItemGroup>
 
   <!-- Build + link the umbra static library (CRT model matches via shared config). -->

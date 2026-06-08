@@ -349,6 +349,21 @@ namespace
         ::SetWindowsHookExW(WH_CALLWNDPROC,    CallWndProc,    g_self, tid);
         ::SetWindowsHookExW(WH_CALLWNDPROCRET, CallWndRetProc, g_self, tid);
     }
+
+    // Attach the dui70 Element::PaintBackground hook once it can be — i.e. once dui70 is mapped
+    // in this process. Unlike GetSysColor/uxtheme (loaded early), dui70 loads LAZILY (only when
+    // the shell shows DUI — Control Panel, the navigation pane, ...), so a one-shot at init
+    // would miss it. We retry on each window-creation CBT fire until it attaches, then latch.
+    // A permanent failure (no host RVA / stamp mismatch) makes setProcessWideDuiPaintHook a
+    // cheap flag-check no-op, so retrying costs nothing.
+    void EnsureDuiPaintHook() noexcept
+    {
+        static volatile LONG s_done = 0;
+        if (::InterlockedCompareExchange(&s_done, 0, 0) != 0)
+            return;
+        if (setProcessWideDuiPaintHook())   // true once attached (transient false while no dui70)
+            ::InterlockedExchange(&s_done, 1);
+    }
 }
 
 extern "C" __declspec(dllexport)
@@ -361,6 +376,7 @@ LRESULT CALLBACK UmbraCbtHook(int code, WPARAM wParam, LPARAM lParam)
         ::InitOnceExecuteOnce(&g_initOnce, InitProcessOnce, nullptr, nullptr);
         PinModule();
         EnsureThreadHooks();
+        EnsureDuiPaintHook();   // attaches when dui70 (lazily) loads — e.g. Control Panel opens
     }
     return ::CallNextHookEx(nullptr, code, wParam, lParam);
 }
