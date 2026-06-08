@@ -62,34 +62,9 @@ if(UMBRA_BUILD_SAMPLE)
         target_compile_options(umbra-sample PRIVATE /utf-8)
     endif()
 
-    # Microsoft Detours — the process-wide GetSysColor/GetSysColorBrush and auto-
-    # dark hooks now live in this harness (the application / interception half),
-    # not in the umbra library, so a library-only build no longer needs vcpkg. The
-    # vcpkg port ships headers + a .lib but no CMake config package, so locate them
-    # directly. Requires the vcpkg toolchain (set VCPKG_ROOT or pass
-    # -DCMAKE_TOOLCHAIN_FILE; see CMakePresets.json).
-    find_path(DETOURS_INCLUDE_DIR "detours/detours.h" REQUIRED)
-    find_library(DETOURS_LIBRARY detours REQUIRED)
-
-    # umbra-hook: a diagnostic harness that segregates Windows' color-determination
-    # paths (user32 / export-vs-internal / uxtheme / DirectUI) onto tabs, and drives
-    # them with the process-wide Detours hooks (ProcessColorHook / AutoDarkMode).
-    add_executable(umbra-hook WIN32
-        sample-hook/main.cpp
-        sample-hook/pages.cpp
-        sample-hook/bpanels.cpp
-        sample-hook/ebrowser.cpp
-        sample-hook/createwlog.cpp
-        sample-hook/ProcessColorHook.cpp
-        sample-hook/AutoDarkMode.cpp
-        sample-hook/ThemeColorHook.cpp
-        sample-hook/hook.rc)
-    target_link_libraries(umbra-hook PRIVATE umbra ole32 shell32 comdlg32 "${DETOURS_LIBRARY}")
-    target_include_directories(umbra-hook PRIVATE "${DETOURS_INCLUDE_DIR}")
-    target_compile_definitions(umbra-hook PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
-    if(MSVC)
-        target_compile_options(umbra-hook PRIVATE /utf-8)
-    endif()
+    # NOTE: the umbra-hook / umbra-inject diagnostic + injection harnesses (and the
+    # Detours-based process-wide hooks they used) were extracted to the WM_NIGHT repo.
+    # A library-only build needs no third-party deps and no vcpkg.
 endif()
 
 # ---------------------------------------------------------------------------
