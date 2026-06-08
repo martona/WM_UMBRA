@@ -8,7 +8,7 @@
 // autodark, createwlog). Set to 0 here (or define it from the build) to compile every diagnostic
 // log out across the payload and harness. TEMP scaffolding — the logs never ship.
 #ifndef UMBRA_DIAG
-#  define UMBRA_DIAG 1
+#  define UMBRA_DIAG 0
 #endif
 
 // --- Diagnostic logs: one fixed location, one file per target -------------

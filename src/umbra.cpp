@@ -5459,19 +5459,22 @@ namespace umbra
 		const auto& p = *reinterpret_cast<DarkModeParams*>(lParam);
 		const std::wstring className = GetWndClassName(hWnd);
 
-		if (className == WC_BUTTON)
+		if (className == WC_BUTTON || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.BUTTON."))
 		{
 			umbra::setBtnCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
 		}
 
-		if (className == WC_STATIC)
+		if (className == WC_STATIC || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.STATIC."))
 		{
 			umbra::setStaticTextCtrlSubclass(hWnd, p);
 			return TRUE;
 		}
 
-		if (className == WC_COMBOBOX)
+		if (className == WC_COMBOBOX || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.COMBOBOX."))
 		{
 			umbra::setComboBoxCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
@@ -5501,7 +5504,7 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == REBARCLASSNAMEW)
+		if (className == REBARCLASSNAMEW || className == L"SizeableRebar")
 		{
 			umbra::setRebarCtrlSubclass(hWnd, p);
 			return TRUE;
@@ -5519,7 +5522,8 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == WC_TABCONTROL)
+		if (className == WC_TABCONTROL || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.SysTabControl32."))
 		{
 			umbra::setTabCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
@@ -5531,7 +5535,8 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == WC_SCROLLBAR)
+		if (className == WC_SCROLLBAR || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.SCROLLBAR."))
 		{
 			umbra::setScrollBarCtrlTheme(hWnd, p);
 			return TRUE;

@@ -43,6 +43,7 @@
 #include <windows.h>
 #include <uxtheme.h>
 #include <vsstyle.h>
+#include <string_view>
 
 #define _DARKMODE_SUPPORT_OLDER_OS
 
@@ -349,4 +350,11 @@ namespace DarkModeHelper {
 	 * 			allowing for dynamic theme changes based on user preferences or system settings.
 	 */
 	void SetDarkMode(bool useDark, bool doFixDarkScrollbar);
+
+	/**
+	 * @brief Checks if a string starts with another
+	 * 
+	 * @remarks Used for WindowsForms10.* class matching.
+	*/
+	bool check_prefix(std::wstring_view const str, std::wstring_view const prefix);
 };

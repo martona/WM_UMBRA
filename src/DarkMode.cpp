@@ -171,6 +171,15 @@ void DarkModeHelper::RefreshTitleBarThemeColor(HWND hWnd)
 }
 #endif
 
+/**
+	* @brief Checks if a string starts with another
+	* 
+	* @remarks Used for WindowsForms10.* class matching.
+*/
+bool DarkModeHelper::check_prefix(std::wstring_view const str, std::wstring_view const prefix) {
+	return str.starts_with(prefix);
+}
+
 // Check for color scheme change message
 bool DarkModeHelper::IsColorSchemeChangeMessage(LPARAM lParam)
 {

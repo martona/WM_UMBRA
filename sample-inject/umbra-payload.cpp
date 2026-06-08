@@ -28,6 +28,7 @@
 #include <unordered_set>
 
 #include <umbra.h>
+#include <DarkMode.h>
 #include "hook.h"   // setProcessWideColorHook / setProcessWideThemeColorHook (sample-hook)
 
 namespace
@@ -101,6 +102,9 @@ namespace
         g_isTarget = SameI(name, L"regedit.exe")  || 
                      SameI(name, L"regedt32.exe") ||
 //                   SameI(name, L"umbra-sample.exe") ||
+                     SameI(name, L"7zFM.exe") ||
+                     SameI(name, L"7zG.exe") ||
+                     SameI(name, L"spyxx_amd64.exe") ||
                      SameI(name, L"explorer.exe") ||
                      SameI(name, L"mmc.exe");
     }
@@ -165,7 +169,6 @@ namespace
         static const wchar_t* const kPrefixes[] = {
             L"Windows.UI.",                // XAML/WinUI/Composition islands (InputHost fail-fast)
             L".NET-BroadcastEventWindow",  // .NET runtime WM_SETTINGCHANGE broadcast window
-            L"WindowsForms10.",            // .NET WinForms: managed wndproc, native subclass faults it
         };
         for (const wchar_t* p : kPrefixes)
             if (::wcsncmp(cls, p, ::wcslen(p)) == 0)
@@ -206,9 +209,20 @@ namespace
             WC_TREEVIEW, WC_TABCONTROL, WC_SCROLLBAR, WC_COMBOBOXEX, WC_LINK,
             REBARCLASSNAME, TOOLBARCLASSNAME, UPDOWN_CLASS, STATUSCLASSNAME,
             PROGRESS_CLASS, TRACKBAR_CLASS, RICHEDIT_CLASS, MSFTEDIT_CLASS,
+            L"SizeableRebar",
         };
         for (const wchar_t* c : kControls)
             if (::CompareStringOrdinal(cls, -1, c, -1, TRUE) == CSTR_EQUAL)
+                return true;
+        static const wchar_t* const kWinForms[] = {
+            L"WindowsForms10.BUTTON.", 
+            L"WindowsForms10.STATIC.", 
+            L"WindowsForms10.COMBOBOX.", 
+            L"WindowsForms10.SysTabControl32.", 
+            L"WindowsForms10.SCROLLBAR.", 
+        };
+        for (const wchar_t* c : kWinForms)
+            if (DarkModeHelper::check_prefix(cls, c))
                 return true;
         return false;
     }
@@ -298,7 +312,7 @@ namespace
                 else
                     umbra::applyDarkToNewWindow(info->hwnd);
                 t_theming = false;
-                LogThemedWindow(info->hwnd);                     // TEMP DIAGNOSTIC
+                LogThemedWindow(info->hwnd);
             }
             else if (info->message == WM_INITDIALOG && info->hwnd != nullptr
                      && !IsThemingBlacklisted(info->hwnd)
