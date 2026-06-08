@@ -5781,6 +5781,35 @@ namespace umbra
 				return true;
 			}
 		}
+
+		// Control Panel category page: the helper area around the applet list is a DUI surface
+		// painted from the CONTROLPANEL theme, which has no dark variant — CPANEL_NAVIGATIONPANE (1)
+		// and CPANEL_CONTENTPANE (2) fill it light (the content pane spans the whole page). Flat-fill
+		// both to the view background, so the helper reads as one surface with the (already-dark)
+		// item list it surrounds. The body/link text stays readable via the CONTROLPANELSTYLE
+		// override in darkThemeColor.
+		if (::CompareStringOrdinal(classList, -1, L"CONTROLPANEL", -1, TRUE) == CSTR_EQUAL
+			&& (partId == 1 || partId == 2))
+			{ outFill = umbra::getViewBackgroundColor(); return true; }
+
+		// The Control Panel applet page's two chrome strips the CONTENTPANE doesn't cover: the
+		// command bar (CPLCommandModule::CommandModule — the "Organize" strip between heading and
+		// list) and the bottom details strip (PreviewPane). Both paint light; flat-fill their
+		// background (part 1) to the window chrome colour. The command buttons/links draw on top
+		// and are left to control theming.
+		if (partId == 1
+			&& (::CompareStringOrdinal(classList, -1, L"CPLCommandModule::CommandModule", -1, TRUE) == CSTR_EQUAL
+				|| ::CompareStringOrdinal(classList, -1, L"PreviewPane", -1, TRUE) == CSTR_EQUAL))
+			{ outFill = umbra::getDlgBackgroundColor(); return true; }
+
+		// Window NC caption (WP_CAPTION=1 / WP_MAXCAPTION=5): a frame whose caption is uxtheme-
+		// drawn rather than via DWM paints it light — e.g. mmc's maximized MDI child (MMCChildFrm),
+		// the white seam under the menu bar. Flat-fill to the window chrome background. The harness
+		// names the (pre-hook, unmapped) WINDOW theme handle to this class for caption windows.
+		if (::CompareStringOrdinal(classList, -1, L"Window", -1, TRUE) == CSTR_EQUAL
+			&& (partId == 1 || partId == 5))
+			{ outFill = umbra::getDlgBackgroundColor(); return true; }
+
 		return false;
 	}
 
@@ -5812,6 +5841,31 @@ namespace umbra
 			return true;
 		}
 
+		// Control Panel category page (CONTROLPANELSTYLE): once darkThemeBackground fills the
+		// CONTROLPANEL panes dark, the theme's text — black body/group text, dark-blue titles, the
+		// blue category links — draws on dark. Override to the palette: the link parts (HELPLINK 7,
+		// TASKLINK 8, CONTENTLINK 10, SECTIONTITLELINK 11) take the link accent; the rest the body
+		// text colour. SUCCESSFUL-query override, like TaskDialogStyle above.
+		if (classList != nullptr && propId == 3803 /*TMT_TEXTCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"CONTROLPANELSTYLE", -1, TRUE) == CSTR_EQUAL)
+		{
+			const bool isLink = (partId == 7 || partId == 8 || partId == 10 || partId == 11);
+			outColor = isLink ? umbra::getLinkTextColor() : umbra::getTextColor();
+			return true;
+		}
+
+		// Control Panel command bar buttons (CPLCommandModule::CommandModule): the "Organize" /
+		// view-button labels are theme-defined near-black (000000), so on the dark command band
+		// (darkThemeBackground above) they draw black-on-black. Override to the palette text colour.
+		// Scoped to the CPL module — the generic CommandModule already returns light text in dark
+		// mode and carries coloured links we must not flatten.
+		if (classList != nullptr && propId == 3803 /*TMT_TEXTCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"CPLCommandModule::CommandModule", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getTextColor();
+			return true;
+		}
+
 		// explorer's Run dialog fills its PRIMARYPANEL by reading TASKDIALOG's TMT_FILLCOLOR
 		// (3802) and FillRect-ing it itself — a SUCCESSFUL query the DrawThemeBackground hook
 		// can't intercept. Serve the control background (the part-1 content shade
@@ -5821,6 +5875,19 @@ namespace umbra
 		    && ::CompareStringOrdinal(classList, -1, L"TaskDialog", -1, TRUE) == CSTR_EQUAL)
 		{
 			outColor = umbra::getCtrlBackgroundColor();
+			return true;
+		}
+
+		// Explorer / Control Panel navigation (task) pane. It backgrounds itself by reading
+		// ExplorerNavPane's TMT_FILLCOLOR and FillRect-ing it (no DrawThemeBackground, so the
+		// bg-fill hook can't see it, and no window erase reaches it). On Control Panel's task pane
+		// the dark variant doesn't engage, so it serves white. Force the view background — matching
+		// the content pane and item list it sits beside. Where the dark variant IS active (the
+		// file-explorer folder pane) this is a no-op: it already returns the same 0x191919.
+		if (classList != nullptr && propId == 3802 /*TMT_FILLCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"ExplorerNavPane", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getViewBackgroundColor();
 			return true;
 		}
 

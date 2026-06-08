@@ -233,19 +233,29 @@ namespace
         LogOnce(key, line);
     }
 
-    void LogThemeDraw(HTHEME hTheme, const std::wstring& cls, int part, int state, LPCRECT rc, const wchar_t* api)
+    void LogThemeDraw(HTHEME hTheme, const std::wstring& cls, int part, int state, LPCRECT rc, const wchar_t* api, HDC hdc)
     {
         const int l   = (rc != nullptr) ? static_cast<int>(rc->left) : 0;
         const int t   = (rc != nullptr) ? static_cast<int>(rc->top) : 0;
         const int w   = (rc != nullptr) ? static_cast<int>(rc->right - rc->left) : -1;
         const int hgt = (rc != nullptr) ? static_cast<int>(rc->bottom - rc->top) : -1;
-        wchar_t key[360];
-        ::StringCchPrintfW(key, ARRAYSIZE(key), L"D|%s|%p|%s|%d|%d", api,
-            reinterpret_cast<void*>(hTheme), cls.c_str(), part, state);
-        wchar_t line[460];
+
+        // Attribute the draw to its target window, so a light band maps to a class we can fix
+        // (the seam, the Actions container, real-vs-OCX scrollbars). A memory / double-buffered
+        // DC has no owning window -> "memDC". Also the only handle we get for a theme opened
+        // before our hook (logged class "?").
+        wchar_t wnd[64] = L"memDC";
+        const HWND hwnd = ::WindowFromDC(hdc);
+        if (hwnd != nullptr)
+            ::GetClassNameW(hwnd, wnd, ARRAYSIZE(wnd));
+
+        wchar_t key[420];
+        ::StringCchPrintfW(key, ARRAYSIZE(key), L"D|%s|%p|%s|%d|%d|%s", api,
+            reinterpret_cast<void*>(hTheme), cls.c_str(), part, state, wnd);
+        wchar_t line[520];
         ::StringCchPrintfW(line, ARRAYSIZE(line),
-            L"%-5s h=%p %-34s part=%-4d state=%-3d @(%d,%d) %dx%d\r\n",
-            api, reinterpret_cast<void*>(hTheme), cls.c_str(), part, state, l, t, w, hgt);
+            L"%-5s h=%p %-30s part=%-4d state=%-3d @(%d,%d) %dx%d  wnd=%s\r\n",
+            api, reinterpret_cast<void*>(hTheme), cls.c_str(), part, state, l, t, w, hgt, wnd);
         LogOnce(key, line);
     }
 
@@ -322,11 +332,29 @@ namespace
     // decision for this (class, part, state); otherwise draw normally. This is the
     // lever for DUI bands uxtheme paints light (no dark variant) — unreachable by
     // any colour query.
+    // A theme opened before our hook installs is unmapped (ClassOf -> "?"). The common case is a
+    // frame's WINDOW (NC) theme, opened process-wide at startup; its caption parts (WP_CAPTION=1 /
+    // WP_MAXCAPTION=5) paint the light strip that shows as mmc's white MDI seam. When such a draw
+    // targets a real caption-bearing window, name it "Window" so umbra::darkThemeBackground can
+    // darken it. The WS_CAPTION gate excludes the other "?" handles (tree/list items, menus,
+    // tooltips — none of which are caption windows), so the inference can't misfire onto them.
+    std::wstring ResolveClass(HTHEME hTheme, HDC hdc, int partId)
+    {
+        std::wstring cls = ClassOf(hTheme);
+        if (cls == L"?" && (partId == 1 || partId == 5))
+        {
+            const HWND w = ::WindowFromDC(hdc);
+            if (w != nullptr && (::GetWindowLongPtrW(w, GWL_STYLE) & WS_CAPTION) == WS_CAPTION)
+                cls = L"Window";
+        }
+        return cls;
+    }
+
     HRESULT WINAPI HookDrawThemeBackground(HTHEME hTheme, HDC hdc, int iPartId, int iStateId,
         LPCRECT pRect, LPCRECT pClipRect)
     {
-        const std::wstring cls = ClassOf(hTheme);
-        LogThemeDraw(hTheme, cls, iPartId, iStateId, pRect, L"DTB");
+        const std::wstring cls = ResolveClass(hTheme, hdc, iPartId);
+        LogThemeDraw(hTheme, cls, iPartId, iStateId, pRect, L"DTB", hdc);
 
         COLORREF fill{};
         if (pRect != nullptr && umbra::darkThemeBackground(cls.c_str(), iPartId, iStateId, fill))
@@ -341,8 +369,8 @@ namespace
     HRESULT WINAPI HookDrawThemeBackgroundEx(HTHEME hTheme, HDC hdc, int iPartId, int iStateId,
         LPCRECT pRect, const DTBGOPTS* pOptions)
     {
-        const std::wstring cls = ClassOf(hTheme);
-        LogThemeDraw(hTheme, cls, iPartId, iStateId, pRect, L"DTBEx");
+        const std::wstring cls = ResolveClass(hTheme, hdc, iPartId);
+        LogThemeDraw(hTheme, cls, iPartId, iStateId, pRect, L"DTBEx", hdc);
 
         COLORREF fill{};
         if (pRect != nullptr && umbra::darkThemeBackground(cls.c_str(), iPartId, iStateId, fill))
