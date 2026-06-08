@@ -43,6 +43,12 @@
 #  define DUI_CC __stdcall
 #endif
 
+// Per-paint diagnostic log (<logs>\dui-paint-<exe>.log). Flip to 0 to compile it out entirely —
+// no file, no per-paint WindowFromDC/format/write; the Log* calls become empty inlines.
+#ifndef UMBRA_DUI_DIAG
+#  define UMBRA_DUI_DIAG 1
+#endif
+
 // --- host->payload handoff: a PE SHARED section (no file, no named object) ------------------
 // This is a global-hook DLL: it has a SEPARATE image — and separate ordinary globals — in every
 // process it maps into, so an exported setter called in the HOST would set only the host's copy;
@@ -89,19 +95,18 @@ namespace
         return g_ctrlBrush;
     }
 
-    // ---- logger -> <logs>\dui-paint-<exe>.log ------------------------------
-    // NO dedup for paints: this is a STATE-TRANSITION bug (dark on first render, white on
-    // breadcrumb-back), and the broken repaint has the SAME (code,type,wnd) as the working one —
-    // dedup suppressed exactly the line we need. Log every call with a sequence number and the
-    // decision taken, so the working burst and the broken burst can be diffed. Status lines stay
-    // dedup'd (once each). A soft cap guards a left-running host from filling the disk. No
-    // per-line flush: the OS file cache is coherent for a reader opening the same file, so the
-    // log is live-readable without paying a disk flush per paint.
+    volatile LONG g_seq = 0;   // paint sequence counter (drives the log; kept even when it is off)
+
+    // ---- diagnostics: per-paint log -> <logs>\dui-paint-<exe>.log ---------------------------
+    // TEMP scaffolding (UMBRA_DUI_DIAG). When off, the Log* calls below are empty inlines — no
+    // file, no per-paint WindowFromDC/format/write. When on: no dedup for paints (a state-
+    // transition bug needed every repaint to diff), status lines dedup'd, a soft cap guards a
+    // left-running host, and no per-line flush (the OS cache is coherent for a live reader).
+#if UMBRA_DUI_DIAG
     HANDLE                           g_log = INVALID_HANDLE_VALUE;
     std::mutex                       g_logMutex;
     std::unordered_set<std::wstring> g_seenStatus;
     unsigned long                    g_logCount = 0;
-    volatile LONG                    g_seq      = 0;
 
     void WriteLogLocked(const wchar_t* line) noexcept   // call with g_logMutex held
     {
@@ -162,6 +167,11 @@ namespace
             hdc, el, value, wnd);
         LogRaw(line);
     }
+#else
+    inline void LogStatus(const wchar_t*) noexcept {}
+    inline void LogPaint(unsigned long, const wchar_t*, const void*, HDC,
+                         const void*, int, int, const RECT*) noexcept {}
+#endif
 
     // ---- PE identity of an already-mapped module ---------------------------
     bool PeIdentityOfModule(HMODULE mod, DWORD& stamp, DWORD& sizeOfImage) noexcept
@@ -202,7 +212,7 @@ namespace
             code = static_cast<int>((raw + 20) & 7);
         }
 
-        if (value != nullptr && type != 1 && pRect != nullptr && code != 3 && code != 6)
+        if (value != nullptr && type != 1 && pRect != nullptr && code != 3 && code != 6 && !(code == 2 && type == 9))
         {
             ::FillRect(hdc, pRect, code == 4 ? CtrlBackBrush() : DlgBackBrush() );   // background -> dark; skip the original
             LogPaint(seq, L"FILL", This, hdc, value, code, type, pRect);
