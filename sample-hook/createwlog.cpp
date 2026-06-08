@@ -123,8 +123,12 @@ void StartCreateWindowLog()
     wchar_t path[MAX_PATH];
     umbraLogPath(L"createwlog.txt", path, ARRAYSIZE(path));
 
+#if UMBRA_DIAG
     g_log = ::CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
         nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+#else
+    g_log = INVALID_HANDLE_VALUE;   // diagnostics compiled out (UMBRA_DIAG)
+#endif
     if (g_log == INVALID_HANDLE_VALUE)
         return;
 

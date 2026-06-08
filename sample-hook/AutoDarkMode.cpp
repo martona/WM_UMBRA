@@ -43,10 +43,12 @@ namespace
 
     void DbgInit()
     {
+#if UMBRA_DIAG
         wchar_t path[MAX_PATH];
         umbraLogPath(L"autodark.log", path, ARRAYSIZE(path));
         g_dbg = ::CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
             nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+#endif
         ::InitializeCriticalSection(&g_dbgCs);
         g_dbgReady = true;
     }

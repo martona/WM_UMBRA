@@ -132,7 +132,7 @@ namespace
         std::lock_guard<std::mutex> lock(g_logMutex);
         if (g_log != INVALID_HANDLE_VALUE)
             return;
-
+#if UMBRA_DIAG
         wchar_t path[MAX_PATH];
         umbraLogPath(L"themecolor.log", path, ARRAYSIZE(path));
 
@@ -153,6 +153,7 @@ namespace
             DWORD w = 0;
             ::WriteFile(g_log, hdr, static_cast<DWORD>(sizeof(hdr) - 1), &w, nullptr);
         }
+#endif
     }
 
     void CloseLog()

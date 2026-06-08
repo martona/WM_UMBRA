@@ -50,6 +50,7 @@ namespace
 
     BOOL CALLBACK DbgInitOnce(PINIT_ONCE, PVOID, PVOID*) noexcept
     {
+#if UMBRA_DIAG
         // One fixed repo log dir (see umbraLogPath in hook.h). FILE_APPEND_DATA so the global
         // hook's several processes — and a crash-and-restart — append rather than truncate each
         // other's capture; just delete the file for a clean run.
@@ -57,6 +58,7 @@ namespace
         umbraLogPath(L"umbra-inject.log", path, ARRAYSIZE(path));
         g_dbg = ::CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+#endif
         ::InitializeCriticalSection(&g_dbgCs);
         return TRUE;
     }

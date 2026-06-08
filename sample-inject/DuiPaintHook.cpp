@@ -43,12 +43,6 @@
 #  define DUI_CC __stdcall
 #endif
 
-// Per-paint diagnostic log (<logs>\dui-paint-<exe>.log). Flip to 0 to compile it out entirely —
-// no file, no per-paint WindowFromDC/format/write; the Log* calls become empty inlines.
-#ifndef UMBRA_DUI_DIAG
-#  define UMBRA_DUI_DIAG 1
-#endif
-
 // --- host->payload handoff: a PE SHARED section (no file, no named object) ------------------
 // This is a global-hook DLL: it has a SEPARATE image — and separate ordinary globals — in every
 // process it maps into, so an exported setter called in the HOST would set only the host's copy;
@@ -98,11 +92,11 @@ namespace
     volatile LONG g_seq = 0;   // paint sequence counter (drives the log; kept even when it is off)
 
     // ---- diagnostics: per-paint log -> <logs>\dui-paint-<exe>.log ---------------------------
-    // TEMP scaffolding (UMBRA_DUI_DIAG). When off, the Log* calls below are empty inlines — no
+    // TEMP scaffolding (UMBRA_DIAG). When off, the Log* calls below are empty inlines — no
     // file, no per-paint WindowFromDC/format/write. When on: no dedup for paints (a state-
     // transition bug needed every repaint to diff), status lines dedup'd, a soft cap guards a
     // left-running host, and no per-line flush (the OS cache is coherent for a live reader).
-#if UMBRA_DUI_DIAG
+#if UMBRA_DIAG
     HANDLE                           g_log = INVALID_HANDLE_VALUE;
     std::mutex                       g_logMutex;
     std::unordered_set<std::wstring> g_seenStatus;
