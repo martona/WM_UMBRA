@@ -5317,6 +5317,16 @@ namespace umbra
 			umbra::setTreeViewWindowTheme(hWnd, p._theme);
 			umbra::setDarkTooltips(hWnd, umbra::ToolTipsType::treeview);
 		}
+
+		// A SysTreeView32 fills only its item rows; the empty area below the last item is left to
+		// the default (light) class-brush erase — and the listview path subclasses but this one
+		// didn't, so nothing darkened it (the shell namespace / Control Panel nav pane is the
+		// visible white). Reuse the dark WM_ERASEBKGND fill. Its removal is already in the
+		// injection harness's WM_DESTROY teardown, so MFC hosts (mmc's snap-in trees) stay safe.
+		if (p._subclass)
+		{
+			umbra::setWindowEraseBgSubclass(hWnd);
+		}
 	}
 
 	static void setRebarCtrlSubclass(HWND hWnd, DarkModeParams p)
