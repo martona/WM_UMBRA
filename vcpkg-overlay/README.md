@@ -21,7 +21,7 @@ In your project's `vcpkg-configuration.json`:
     {
       "kind": "git",
       "repository": "https://github.com/martona/WM_UMBRA",
-      "baseline": "e87d7a27e70da5d9e144622bc27c3c0a85336e36",
+      "baseline": "206822a27974256728404cf612ebc8ac72d1f9e5",
       "packages": [ "umbra" ]
     }
   ]
