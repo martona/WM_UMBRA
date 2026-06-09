@@ -72,6 +72,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "DarkMode.h"
 #include "UAHMenuBar.h"
@@ -269,6 +270,8 @@ namespace umbra
 	static constexpr UINT_PTR kWindowNotifySubclassID           = 15;
 	static constexpr UINT_PTR kWindowMenuBarSubclassID          = 16;
 	static constexpr UINT_PTR kWindowSettingChangeSubclassID    = 17;
+	static constexpr UINT_PTR kAcluiCheckListSubclassID         = 18;
+	static constexpr UINT_PTR kWindowBackfillSubclassID         = 19;
 
 	/**
 	 * @struct DarkModeParams
@@ -302,7 +305,7 @@ namespace umbra
 			DWM_WINDOW_CORNER_PREFERENCE _roundCorner = DWMWCP_DEFAULT;
 			COLORREF _borderColor = DWMWA_COLOR_DEFAULT;
 			DWM_SYSTEMBACKDROP_TYPE _mica = DWMSBT_AUTO;
-			COLORREF _tvBackground = RGB(41, 49, 52);
+			COLORREF _tvBackground = RGB(25, 25, 25);   // 0x191919 native dark (tracks getViewBackgroundColor)
 			double _lightness = 50.0;
 			TreeViewStyle _tvStylePrev = TreeViewStyle::classic;
 			TreeViewStyle _tvStyle = TreeViewStyle::classic;
@@ -756,7 +759,8 @@ namespace umbra
 
 	/// Dark views colors
 	static constexpr ColorsView darkColorsView{
-		HEXRGB(0x293134),   // background
+		HEXRGB(0x191919),   // background  (Win11 native dark content fill — matches ItemsView /
+		                    //              ExplorerNavPane / DefView; was 0x293134 blue-slate)
 		HEXRGB(0xE0E2E4),   // text
 		HEXRGB(0x646464),   // gridlines
 		HEXRGB(0x202020),   // Header background
@@ -4181,6 +4185,10 @@ namespace umbra
 	 * @see umbra::setListViewCtrlSubclass()
 	 * @see umbra::removeListViewCtrlSubclass()
 	 */
+	// Re-entry guard for the ListviewPopup phantom-hscroll kill in ListViewSubclass:
+	// ShowScrollBar re-enters WM_NCCALCSIZE, which would otherwise recurse.
+	static thread_local bool g_listViewHScrollFixActive = false;
+
 	static LRESULT CALLBACK ListViewSubclass(
 		HWND hWnd,
 		UINT uMsg,
@@ -4192,6 +4200,34 @@ namespace umbra
 	{
 		switch (uMsg)
 		{
+			case WM_NCCALCSIZE:
+			{
+				// Kill the phantom horizontal scrollbar the breadcrumb / autocomplete
+				// ListviewPopup leaves on its list after the dark-mode theme switch — visible
+				// but with no scroll range (GetScrollInfo: max-min < page), and unthemed until
+				// it is touched. Let the list compute its NC first, then hide the bar. Scoped
+				// to a ListviewPopup host + the no-range condition, so a list that genuinely
+				// scrolls horizontally keeps its bar; the guard stops the ShowScrollBar-driven
+				// WM_NCCALCSIZE from recursing (ShowScrollBar on an already-hidden bar is a
+				// harmless no-op, so no separate visible-state check is needed).
+				const LRESULT lr = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+				if (umbra::isEnabled() && !g_listViewHScrollFixActive)
+				{
+					SCROLLINFO si{};
+					si.cbSize = sizeof(si);
+					si.fMask = SIF_RANGE | SIF_PAGE;
+					if (::GetScrollInfo(hWnd, SB_HORZ, &si)
+						&& (si.nMax - si.nMin) < static_cast<int>(si.nPage)
+						&& CmpWndClassName(::GetParent(hWnd), L"ListviewPopup"))
+					{
+						g_listViewHScrollFixActive = true;
+						::ShowScrollBar(hWnd, SB_HORZ, FALSE);
+						g_listViewHScrollFixActive = false;
+					}
+				}
+				return lr;
+			}
+
 			case WM_NCDESTROY:
 			{
 				::RemoveWindowSubclass(hWnd, ListViewSubclass, uIdSubclass);
@@ -5281,6 +5317,16 @@ namespace umbra
 			umbra::setTreeViewWindowTheme(hWnd, p._theme);
 			umbra::setDarkTooltips(hWnd, umbra::ToolTipsType::treeview);
 		}
+
+		// A SysTreeView32 fills only its item rows; the empty area below the last item is left to
+		// the default (light) class-brush erase — and the listview path subclasses but this one
+		// didn't, so nothing darkened it (the shell namespace / Control Panel nav pane is the
+		// visible white). Reuse the dark WM_ERASEBKGND fill. Its removal is already in the
+		// injection harness's WM_DESTROY teardown, so MFC hosts (mmc's snap-in trees) stay safe.
+		if (p._subclass)
+		{
+			umbra::setWindowEraseBgSubclass(hWnd);
+		}
 	}
 
 	static void setRebarCtrlSubclass(HWND hWnd, DarkModeParams p)
@@ -5333,24 +5379,102 @@ namespace umbra
 		}
 	}
 
+	// --- aclui CHECKLIST_ACLUI: owner-drawn Allow/Deny permissions list -------
+	// Reached by the child-walk but it paints its own body, and both the body and
+	// its label statics derive from COLOR_WINDOW / dialog faces that user32 resolves
+	// from the internal sys-color table — the process GetSysColor hook can't reach
+	// them, so they stay light. We darken the WHOLE field to the VIEW background — the
+	// same colour the listview above it uses — so the permissions list and the user
+	// list read as one surface: the body via WM_ERASEBKGND, the child statics via
+	// WM_CTLCOLORSTATIC. Without the latter, aclui colours the statics dialog-dark
+	// (0x202020) and they read as lighter patches on the body.
+	static LRESULT CALLBACK AcluiCheckListSubclass(
+		HWND hWnd,
+		UINT uMsg,
+		WPARAM wParam,
+		LPARAM lParam,
+		UINT_PTR uIdSubclass,
+		[[maybe_unused]] DWORD_PTR dwRefData
+	)
+	{
+		switch (uMsg)
+		{
+			case WM_NCDESTROY:
+			{
+				::RemoveWindowSubclass(hWnd, AcluiCheckListSubclass, uIdSubclass);
+				break;
+			}
+
+			case WM_ERASEBKGND:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+
+				RECT rcClient{};
+				::GetClientRect(hWnd, &rcClient);
+				::FillRect(reinterpret_cast<HDC>(wParam), &rcClient, umbra::getViewBackgroundBrush());
+				return TRUE;
+			}
+
+			case WM_CTLCOLORSTATIC:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+
+				const bool isChildEnabled = ::IsWindowEnabled(reinterpret_cast<HWND>(lParam)) == TRUE;
+				auto hdc = reinterpret_cast<HDC>(wParam);
+				::SetTextColor(hdc, isChildEnabled ? umbra::getTextColor() : umbra::getDisabledTextColor());
+				::SetBkColor(hdc, umbra::getViewBackgroundColor());
+				return reinterpret_cast<LRESULT>(umbra::getViewBackgroundBrush());
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+		return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+	}
+
+	// Best-effort dark for CHECKLIST_ACLUI: DarkMode_Explorer (dark scroll bar and
+	// dark-aware bits) + the field subclass above (body and label statics → ctrlBackground).
+	static void setAcluiCheckListSubclassAndTheme(HWND hWnd, DarkModeParams p)
+	{
+		if (p._theme)
+		{
+			umbra::setDarkThemeExperimental(hWnd, L"DarkMode_Explorer");
+		}
+		if (p._subclass)
+		{
+			umbra::setSubclass(hWnd, AcluiCheckListSubclass, kAcluiCheckListSubclassID);
+		}
+	}
+
 	static BOOL CALLBACK DarkEnumChildProc(HWND hWnd, LPARAM lParam)
 	{
 		const auto& p = *reinterpret_cast<DarkModeParams*>(lParam);
 		const std::wstring className = GetWndClassName(hWnd);
 
-		if (className == WC_BUTTON)
+		if (className == WC_BUTTON || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.BUTTON."))
 		{
 			umbra::setBtnCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
 		}
 
-		if (className == WC_STATIC)
+		if (className == WC_STATIC || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.STATIC."))
 		{
 			umbra::setStaticTextCtrlSubclass(hWnd, p);
 			return TRUE;
 		}
 
-		if (className == WC_COMBOBOX)
+		if (className == WC_COMBOBOX || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.COMBOBOX."))
 		{
 			umbra::setComboBoxCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
@@ -5380,7 +5504,7 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == REBARCLASSNAMEW)
+		if (className == REBARCLASSNAMEW || className == L"SizeableRebar")
 		{
 			umbra::setRebarCtrlSubclass(hWnd, p);
 			return TRUE;
@@ -5398,7 +5522,8 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == WC_TABCONTROL)
+		if (className == WC_TABCONTROL || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.SysTabControl32."))
 		{
 			umbra::setTabCtrlSubclassAndTheme(hWnd, p);
 			return TRUE;
@@ -5410,7 +5535,8 @@ namespace umbra
 			return TRUE;
 		}
 
-		if (className == WC_SCROLLBAR)
+		if (className == WC_SCROLLBAR || 
+			DarkModeHelper::check_prefix(className, L"WindowsForms10.SCROLLBAR."))
 		{
 			umbra::setScrollBarCtrlTheme(hWnd, p);
 			return TRUE;
@@ -5446,6 +5572,31 @@ namespace umbra
 			return TRUE;
 		}
 
+		// aclui's owner-drawn Allow/Deny permissions list (the Security dialog).
+		if (className == L"CHECKLIST_ACLUI")
+		{
+			umbra::setAcluiCheckListSubclassAndTheme(hWnd, p);
+			return TRUE;
+		}
+
+		// File-dialog / Explorer address & search band custom windows. These paint
+		// their own COLOR_WINDOW (white) background — no uxtheme or GetSysColor hook
+		// sees it — but they ARE real windows the auto-dark hook reaches on WM_CREATE.
+		// setDarkWndNotifySafe gives them ctl-color + child theming but no erase fill,
+		// so add a dark WM_ERASEBKGND fill (as for CHECKLIST_ACLUI). "Address Band Root"
+		// is the sliver just left of the breadcrumb.
+		if (className == L"_SearchEditBoxFakeWindow"
+			|| className == L"Search Box"
+			|| className == L"SearchEditBoxWrapperClass"
+			|| className == L"Address Band Root")
+		{
+			if (p._subclass)
+			{
+				umbra::setWindowEraseBgSubclass(hWnd);
+			}
+			return TRUE;
+		}
+
 #if 0 // for debugging
 		if (className == L"#32770") // dialog
 		{
@@ -5465,6 +5616,343 @@ namespace umbra
 		};
 
 		::EnumChildWindows(hParent, umbra::DarkEnumChildProc, reinterpret_cast<LPARAM>(&p));
+	}
+
+	// Applies the class-specific subclass/theme that DarkEnumChildProc gives a
+	// child — but to hWnd ITSELF. Lets a per-window auto-theming hook (e.g. the
+	// umbra-hook harness) class-theme each control as it is created, reusing the
+	// same dispatch the tree walk uses rather than duplicating the big class switch.
+	void setDarkChildCtrl(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		DarkModeParams p{
+			umbra::isExperimentalActive() ? L"DarkMode_Explorer" : nullptr
+			, true   // subclass
+			, true   // theme
+		};
+
+		umbra::DarkEnumChildProc(hWnd, reinterpret_cast<LPARAM>(&p));
+	}
+
+	// The hook-free "theme this freshly-created window" decision a per-window
+	// auto-theming hook applies on WM_CREATE: window-level canvas/ctl-color, the
+	// class-specific child subclass, and a menu-bar subclass when the window owns a
+	// menu. The interception that drives it (a WH_CALLWNDPROCRET hook + CreateThread
+	// detour) is an application concern and lives outside the library.
+	void applyDarkToNewWindow(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		umbra::setDarkWndNotifySafe(hWnd);
+		umbra::setDarkChildCtrl(hWnd);
+		if (::GetMenu(hWnd) != nullptr)
+			umbra::setWindowMenuBarSubclass(hWnd);
+
+		// Flash prevention: a top-level window erases its client with the (light)
+		// class brush on first show, before its content paints — the white "flashbang".
+		// Installing a dark WM_ERASEBKGND subclass here, at WM_CREATE (the first chance
+		// there is), makes that very first erase dark, so the compositor never has a
+		// light frame to show. Top-level only — child controls keep their per-class
+		// background shade.
+		if ((::GetWindowLongPtrW(hWnd, GWL_STYLE) & WS_CHILD) == 0)
+			umbra::setWindowEraseBgSubclass(hWnd);
+	}
+
+	// Early dark-mode prep for a WH_CALLWNDPROC hook (runs on WM_NCCREATE, before the
+	// window proc and before the window opens its theme). Only allows dark mode — NO
+	// SetWindowTheme, which breaks shell items-view selection rendering — so DUI/uxtheme
+	// can resolve the dark theme variant. The full theming still runs from the
+	// WH_CALLWNDPROCRET pass (applyDarkToNewWindow).
+	void prepDarkModeForNewWindow(HWND hWnd)
+	{
+		if (hWnd == nullptr)
+			return;
+
+		umbra::allowDarkModeForWindow(hWnd, umbra::isExperimentalActive());
+	}
+
+	// Maps a Win32 system-color index to UMBRA's dark palette. The pure-data half
+	// of the old process-wide GetSysColor/GetSysColorBrush hook: an application can
+	// inline-hook those user32 exports and consult this for the colour to serve,
+	// keeping the palette knowledge in the library and the interception (Detours)
+	// in the app. Returns false for indices UMBRA does not override (the caller
+	// then uses the real system color). Mirrors how UMBRA seeds its palette from
+	// sys colors.
+	bool darkSysColor(int nIndex, COLORREF& outColor) noexcept
+	{
+		switch (nIndex)
+		{
+		// --- backgrounds ---
+		case COLOR_WINDOW:                outColor = umbra::getCtrlBackgroundColor(); return true;
+		case COLOR_BTNFACE:               // == COLOR_3DFACE
+		case COLOR_3DLIGHT:
+		case COLOR_ACTIVECAPTION:
+		case COLOR_INACTIVECAPTION:
+		case COLOR_MENU:
+		case COLOR_MENUBAR:
+		case COLOR_SCROLLBAR:
+		case COLOR_BACKGROUND:            // == COLOR_DESKTOP
+		case COLOR_APPWORKSPACE:
+		case COLOR_INFOBK:                outColor = umbra::getBackgroundColor(); return true;
+
+		// --- text ---
+		case COLOR_WINDOWTEXT:
+		case COLOR_BTNTEXT:
+		case COLOR_MENUTEXT:
+		case COLOR_CAPTIONTEXT:
+		case COLOR_INFOTEXT:
+		case COLOR_HIGHLIGHTTEXT:         outColor = umbra::getTextColor(); return true;
+		case COLOR_GRAYTEXT:
+		case COLOR_INACTIVECAPTIONTEXT:   outColor = umbra::getDisabledTextColor(); return true;
+		case COLOR_HOTLIGHT:              outColor = umbra::getLinkTextColor(); return true;
+
+		// --- selection / highlight ---
+		case COLOR_HIGHLIGHT:
+		case COLOR_MENUHILIGHT:           outColor = umbra::getHotBackgroundColor(); return true;
+
+		// --- edges / 3D ---
+		case COLOR_WINDOWFRAME:
+		case COLOR_3DDKSHADOW:
+		case COLOR_3DSHADOW:              // == COLOR_BTNSHADOW
+		case COLOR_ACTIVEBORDER:
+		case COLOR_INACTIVEBORDER:        outColor = umbra::getEdgeColor(); return true;
+		case COLOR_3DHIGHLIGHT:           outColor = umbra::getHotEdgeColor(); return true; // == BTNHIGHLIGHT/3DHILIGHT
+
+		default:                          return false;
+		}
+	}
+
+	// Counterpart to darkSysColor for uxtheme background drawing: decides whether to
+	// replace a DrawThemeBackground[Ex] themed part with a flat dark fill, for DUI
+	// bands uxtheme paints light (no dark variant). Targeted by class — only pure
+	// background bands whose foreground text is already light, so a flat fill needs
+	// no companion text override. Expanded from the DrawThemeBackground parts the
+	// umbra-hook harness logs.
+	bool darkThemeBackground(const wchar_t* classList, int partId,
+	                         int stateId, COLORREF& outFill) noexcept
+	{
+		if (classList == nullptr)
+			return false;
+
+		const std::wstring_view cls(classList);
+		const COLORREF dark = umbra::getBackgroundColor();
+
+		// Explorer / file-dialog top strip (the address + search band). The harness's
+		// DrawThemeBackground log shows it is a composite painted from several light
+		// theme parts with no dark variant: the rebar band itself, the address box,
+		// and the search box. Flat-fill each so the whole strip reads dark; their text
+		// is drawn light, so no companion text override is needed. We deliberately
+		// skip the glyph parts (SearchBox part 3) and the nav buttons (Navigation).
+		//   Rebar: part 3 = RP_BAND, part 6 = RP_BACKGROUND.
+		if (cls == L"Rebar" && (partId == 3 || partId == 6))         { outFill = dark; return true; }
+		if (cls == L"AddressBand" && partId == 1)                    { outFill = dark; return true; }
+		if (cls == L"SearchBoxComposited::SearchBox" && partId == 1) { outFill = dark; return true; }
+
+		// Color-queried but never drawn in testing; harmless to keep as a known band.
+		if (cls == L"Communications::Rebar")                         { outFill = dark; return true; }
+
+		// Shell-created tab control / listview header (SysTabControl32 / SysHeader32):
+		// real common controls, but umbra's custom-draw doesn't take here, so they fall
+		// through to uxtheme light. Our own tabs/headers custom-draw and never reach
+		// DrawThemeBackground, so darkening these classes catches only the shell ones.
+		// Tab items: the SELECTED tab (TABP_TABITEM state TIS_SELECTED=3) takes the control
+		// background — the same surface the DUI body below it uses (COLOR_WINDOW →
+		// ctrlBackground) — so the active tab visually JOINS "what's showing"; the rest
+		// recede to the darker window background. Only the shell's fall-through tabs (e.g.
+		// Advanced Security) reach here; our own tabs custom-draw and never do.
+		if (cls == L"Tab" && partId == 1)
+		{
+			outFill = (stateId == 3) ? umbra::getCtrlBackgroundColor() : dark;
+			return true;
+		}
+		if (cls == L"Header" && (partId == 0 || partId == 1 || partId == 2))
+		{
+			outFill = dark;
+			return true;
+		}
+
+		// comctl32 TaskDialog — the modern "message box" (regedit's delete-key confirm, shell
+		// error prompts) and classic dialogs that borrow its theme (explorer's Run dialog is a
+		// #32770 that paints its background from TASKDIALOG panes). The panes have no dark
+		// variant, so uxtheme draws them light. The class string's case varies by caller (comctl
+		// opens "TaskDialog", shell32 opens "TASKDIALOG"), so match case-insensitively. Two-tone
+		// by layout: the content pane takes the (lighter) control background, the footer/secondary
+		// pane the dialog background. regedit draws PRIMARYPANEL (1) + SECONDARYPANEL (8); the Run
+		// dialog draws CONTENTPANE (4) + FOOTNOTEPANE (15). comctl-drawn panel text stays readable
+		// via the darkThemeColor TaskDialogStyle override.
+		if (::CompareStringOrdinal(classList, -1, L"TaskDialog", -1, TRUE) == CSTR_EQUAL)
+		{
+			if (partId == 1 || partId == 4)        // content panes
+			{
+				outFill = umbra::getDlgBackgroundColor();
+				return true;
+			}
+			if (partId == 8 || partId == 15)       // footer / secondary panes
+			{
+				outFill = umbra::getCtrlBackgroundColor();
+				return true;
+			}
+		}
+
+		// Control Panel category page: the helper area around the applet list is a DUI surface
+		// painted from the CONTROLPANEL theme, which has no dark variant — CPANEL_NAVIGATIONPANE (1)
+		// and CPANEL_CONTENTPANE (2) fill it light (the content pane spans the whole page). Flat-fill
+		// both to the view background, so the helper reads as one surface with the (already-dark)
+		// item list it surrounds. The body/link text stays readable via the CONTROLPANELSTYLE
+		// override in darkThemeColor.
+		if (::CompareStringOrdinal(classList, -1, L"CONTROLPANEL", -1, TRUE) == CSTR_EQUAL
+			&& (partId == 1 || partId == 2))
+			{ outFill = umbra::getViewBackgroundColor(); return true; }
+
+		// The Control Panel applet page's two chrome strips the CONTENTPANE doesn't cover: the
+		// command bar (CPLCommandModule::CommandModule — the "Organize" strip between heading and
+		// list) and the bottom details strip (PreviewPane). Both paint light; flat-fill their
+		// background (part 1) to the window chrome colour. The command buttons/links draw on top
+		// and are left to control theming.
+		if (partId == 1
+			&& (::CompareStringOrdinal(classList, -1, L"CPLCommandModule::CommandModule", -1, TRUE) == CSTR_EQUAL
+				|| ::CompareStringOrdinal(classList, -1, L"PreviewPane", -1, TRUE) == CSTR_EQUAL))
+			{ outFill = umbra::getDlgBackgroundColor(); return true; }
+
+		// Window NC caption (WP_CAPTION=1 / WP_MAXCAPTION=5): a frame whose caption is uxtheme-
+		// drawn rather than via DWM paints it light — e.g. mmc's maximized MDI child (MMCChildFrm),
+		// the white seam under the menu bar. Flat-fill to the window chrome background. The harness
+		// names the (pre-hook, unmapped) WINDOW theme handle to this class for caption windows.
+		if (::CompareStringOrdinal(classList, -1, L"Window", -1, TRUE) == CSTR_EQUAL
+			&& (partId == 1 || partId == 5))
+			{ outFill = umbra::getDlgBackgroundColor(); return true; }
+
+		return false;
+	}
+
+	// Counterpart to darkThemeBackground for uxtheme TEXT colour — a targeted patch for
+	// theme "holes". When GetThemeColor FAILS (the theme defines no colour for that
+	// part/state/prop), the caller falls back to a colour our GetSysColor export hook
+	// can't reach: e.g. comctl's themed list-item text, which then draws dark-on-dark.
+	// The breadcrumb ListviewPopup is the case in hand — ItemsView::ListView's LVP_LISTITEM
+	// (part 1) base/normal state (0) TMT_TEXTCOLOR (3803) returns ELEMENT NOT FOUND, so its
+	// unselected rows take that fallback while the SELECTED state (which the theme DOES
+	// define) stays correct. Override ONLY the failing query, never a colour the theme
+	// actually provides — so this fills the hole without disturbing working text. Not gated
+	// by class: supplying the palette's view-text colour wherever a list item has no themed
+	// text colour is correct in any mode (getViewTextColor tracks the light/dark palette).
+	bool darkThemeColor(const wchar_t* classList, int partId, int stateId, int propId,
+	                    HRESULT inHr, COLORREF& outColor) noexcept
+	{
+		// comctl32 TaskDialog text. Once darkThemeBackground flat-fills the TaskDialog panels,
+		// the body / footnote / verification text — which the theme defines as near-black via a
+		// SUCCESSFUL GetThemeColor — would draw black-on-dark. Override TaskDialogStyle's text
+		// colour (TMT_TEXTCOLOR=3803) to the palette text colour; keep the main-instruction pane
+		// (part 2 = MAININSTRUCTIONPANE, the blue title) as the link/accent colour. This is the
+		// one place we override a query that SUCCEEDED — the theme's own colour is wrong against
+		// our dark fill, unlike the failing-query hole patched below.
+		if (classList != nullptr && std::wstring_view(classList) == L"TaskDialogStyle"
+		    && propId == 3803 /*TMT_TEXTCOLOR*/)
+		{
+			outColor = (partId == 2) ? umbra::getLinkTextColor() : umbra::getTextColor();
+			return true;
+		}
+
+		// Control Panel category page (CONTROLPANELSTYLE): once darkThemeBackground fills the
+		// CONTROLPANEL panes dark, the theme's text — black body/group text, dark-blue titles, the
+		// blue category links — draws on dark. Override to the palette: the link parts (HELPLINK 7,
+		// TASKLINK 8, CONTENTLINK 10, SECTIONTITLELINK 11) take the link accent; the rest the body
+		// text colour. SUCCESSFUL-query override, like TaskDialogStyle above.
+		if (classList != nullptr && propId == 3803 /*TMT_TEXTCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"CONTROLPANELSTYLE", -1, TRUE) == CSTR_EQUAL)
+		{
+			const bool isLink = (partId == 7 || partId == 8 || partId == 10 || partId == 11);
+			outColor = isLink ? umbra::getLinkTextColor() : umbra::getTextColor();
+			return true;
+		}
+
+		// Control Panel command bar buttons (CPLCommandModule::CommandModule): the "Organize" /
+		// view-button labels are theme-defined near-black (000000), so on the dark command band
+		// (darkThemeBackground above) they draw black-on-black. Override to the palette text colour.
+		// Scoped to the CPL module — the generic CommandModule already returns light text in dark
+		// mode and carries coloured links we must not flatten.
+		if (classList != nullptr && propId == 3803 /*TMT_TEXTCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"CPLCommandModule::CommandModule", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getTextColor();
+			return true;
+		}
+
+		// explorer's Run dialog fills its PRIMARYPANEL by reading TASKDIALOG's TMT_FILLCOLOR
+		// (3802) and FillRect-ing it itself — a SUCCESSFUL query the DrawThemeBackground hook
+		// can't intercept. Serve the control background (the part-1 content shade
+		// darkThemeBackground uses) so any PRIMARYPANEL strip the drawn panes don't cover stays
+		// dark, not white.
+		if (classList != nullptr && propId == 3802 /*TMT_FILLCOLOR*/ && partId == 1
+		    && ::CompareStringOrdinal(classList, -1, L"TaskDialog", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getCtrlBackgroundColor();
+			return true;
+		}
+
+		// Explorer / Control Panel navigation (task) pane. It backgrounds itself by reading
+		// ExplorerNavPane's TMT_FILLCOLOR and FillRect-ing it (no DrawThemeBackground, so the
+		// bg-fill hook can't see it, and no window erase reaches it). On Control Panel's task pane
+		// the dark variant doesn't engage, so it serves white. Force the view background — matching
+		// the content pane and item list it sits beside. Where the dark variant IS active (the
+		// file-explorer folder pane) this is a no-op: it already returns the same 0x191919.
+		if (classList != nullptr && propId == 3802 /*TMT_FILLCOLOR*/
+		    && ::CompareStringOrdinal(classList, -1, L"ExplorerNavPane", -1, TRUE) == CSTR_EQUAL)
+		{
+			outColor = umbra::getViewBackgroundColor();
+			return true;
+		}
+
+		if (SUCCEEDED(inHr))
+			return false;
+
+		// part 1 = LVP_LISTITEM, state 0 = base/normal, prop 3803 = TMT_TEXTCOLOR
+		if (partId == 1 && stateId == 0 && propId == 3803)
+		{
+			outColor = umbra::getViewTextColor();
+			return true;
+		}
+
+		return false;
+	}
+
+	void paintDarkThemeEdge(HDC hdc, const wchar_t* classList, int partId, int stateId, const RECT& rc) noexcept
+	{
+		if (hdc == nullptr || classList == nullptr)
+			return;
+
+		// Tab items lose their themed border when darkThemeBackground flat-fills them (we
+		// override the whole DrawThemeBackground draw, edge included). Without it, adjacent
+		// inactive tabs merge into one strip and the selected tab — which shares the body
+		// colour so it can join the content — has no outline at all. Redraw a 1px edge: top
+		// and sides on every tab so neighbours separate and each reads as a tab; the bottom
+		// only on UNSELECTED tabs (TABP_TABITEM state != TIS_SELECTED=3), leaving the selected
+		// tab's bottom open so it still merges into the body below it.
+		if (std::wstring_view(classList) == L"Tab" && partId == 1)
+		{
+			const HPEN pen = umbra::getEdgePen();
+			if (pen == nullptr)
+				return;
+
+			const HGDIOBJ oldPen = ::SelectObject(hdc, pen);
+			const LONG l = rc.left;
+			const LONG t = rc.top;
+			const LONG r = rc.right - 1;
+
+			::MoveToEx(hdc, l, t, nullptr); ::LineTo(hdc, rc.right, t);    // top
+			::MoveToEx(hdc, l, t, nullptr); ::LineTo(hdc, l, rc.bottom);   // left
+			::MoveToEx(hdc, r, t, nullptr); ::LineTo(hdc, r, rc.bottom);   // right
+			if (stateId != 3)                                             // bottom (skip the selected tab)
+			{
+				const LONG b = rc.bottom - 1;
+				::MoveToEx(hdc, l, b, nullptr); ::LineTo(hdc, rc.right, b);
+			}
+
+			::SelectObject(hdc, oldPen);
+		}
 	}
 
 	void setChildCtrlsTheme(HWND hParent)
@@ -5557,6 +6045,155 @@ namespace umbra
 	void removeWindowEraseBgSubclass(HWND hWnd)
 	{
 		umbra::removeSubclass(hWnd, WindowEraseBgSubclass, kWindowEraseBgSubclassID);
+	}
+
+	// ---- Dialog client backfill (the message-box button band) ---------------
+	// A classic MessageBox — and shell dialogs shaped like one — fills its client
+	// background from a cached/private brush during WM_PAINT, not via WM_ERASEBKGND,
+	// WM_CTLCOLOR*, a system-colour brush, or a uxtheme part. So neither the erase
+	// subclass, the ctl-color subclass, the GetSysColor hook, nor the uxtheme hook can
+	// reach it, and the lower button band stays light on a dark dialog. This subclass
+	// lets the dialog paint normally, then re-fills the client — clipping the visible
+	// children so the icon, text, and buttons survive — with the dark dialog brush.
+	// Install it OUTERMOST (after the erase/ctl-color subclasses) so its WM_PAINT runs
+	// DefSubclassProc first and backfills only what the dialog left light.
+
+	struct BackfillExcludeCtx
+	{
+		HWND hwndParent;
+		HDC  hdc;
+	};
+
+	static BOOL CALLBACK BackfillExcludeVisibleChild(HWND hwndChild, LPARAM param)
+	{
+		auto* ctx = reinterpret_cast<BackfillExcludeCtx*>(param);
+
+		if (::IsWindowVisible(hwndChild) == FALSE)
+			return TRUE;
+
+		RECT rcScreen{};
+		if (::GetWindowRect(hwndChild, &rcScreen) == FALSE)
+			return TRUE;
+
+		POINT pts[2] =
+		{
+			{ rcScreen.left,  rcScreen.top    },
+			{ rcScreen.right, rcScreen.bottom }
+		};
+
+		::MapWindowPoints(nullptr, ctx->hwndParent, pts, 2);
+		::ExcludeClipRect(ctx->hdc, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+		return TRUE;
+	}
+
+	static void FillDialogClientBackground(HWND hWnd, HDC hdc, bool excludeChildren)
+	{
+		if (hWnd == nullptr || hdc == nullptr)
+			return;
+
+		RECT rcClient{};
+		::GetClientRect(hWnd, &rcClient);
+
+		const int saved = ::SaveDC(hdc);
+
+		if (excludeChildren && saved != 0)
+		{
+			BackfillExcludeCtx ctx{ hWnd, hdc };
+			::EnumChildWindows(hWnd, BackfillExcludeVisibleChild, reinterpret_cast<LPARAM>(&ctx));
+		}
+
+		::FillRect(hdc, &rcClient, umbra::getDlgBackgroundBrush());
+
+		if (saved != 0)
+			::RestoreDC(hdc, saved);
+	}
+
+	static LRESULT CALLBACK WindowBackfillSubclass(
+		HWND hWnd,
+		UINT uMsg,
+		WPARAM wParam,
+		LPARAM lParam,
+		UINT_PTR uIdSubclass,
+		[[maybe_unused]] DWORD_PTR dwRefData
+	)
+	{
+		switch (uMsg)
+		{
+			case WM_NCDESTROY:
+			{
+				::RemoveWindowSubclass(hWnd, WindowBackfillSubclass, uIdSubclass);
+				break;
+			}
+
+			case WM_ERASEBKGND:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				// Fill the whole client now; the children repaint over it afterwards.
+				FillDialogClientBackground(hWnd, reinterpret_cast<HDC>(wParam), false);
+				return TRUE;
+			}
+
+			case WM_CTLCOLORMSGBOX:
+			case WM_CTLCOLORDLG:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				return umbra::onCtlColorDlg(reinterpret_cast<HDC>(wParam));
+			}
+
+			case WM_CTLCOLORSTATIC:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				return umbra::onCtlColorDlgStaticText(
+					reinterpret_cast<HDC>(wParam),
+					::IsWindowEnabled(reinterpret_cast<HWND>(lParam)) == TRUE);
+			}
+
+			case WM_PAINT:
+			{
+				if (!umbra::isEnabled())
+				{
+					break;
+				}
+				// Let the dialog do its normal paint, then nuke the leftover light client
+				// fill. Clip the children so icon, text, and buttons are not painted over.
+				const LRESULT ret = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+
+				const HDC hdc = ::GetDC(hWnd);
+				if (hdc != nullptr)
+				{
+					FillDialogClientBackground(hWnd, hdc, true);
+					::ReleaseDC(hWnd, hdc);
+				}
+				return ret;
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+		return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+	}
+
+	/// Applies the dialog client backfill subclass (message-box button band).
+	void setWindowBackfillSubclass(HWND hWnd)
+	{
+		umbra::setSubclass(hWnd, WindowBackfillSubclass, kWindowBackfillSubclassID);
+	}
+
+	/// Removes the dialog client backfill subclass.
+	void removeWindowBackfillSubclass(HWND hWnd)
+	{
+		umbra::removeSubclass(hWnd, WindowBackfillSubclass, kWindowBackfillSubclassID);
 	}
 
 	/**
@@ -5766,7 +6403,15 @@ namespace umbra
 		::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_GETBUTTONINFO, lptbcd->nmcd.dwItemSpec, reinterpret_cast<LPARAM>(&tbi));
 
 		const bool isIcon = tbi.iImage != I_IMAGENONE;
-		const bool isDropDown = ((tbi.fsStyle & BTNS_DROPDOWN) == BTNS_DROPDOWN) && isIcon; // has 2 "buttons"
+		// A BTNS_DROPDOWN button only shows a *separate* arrow (the split "two buttons" look) when
+		// the toolbar sets TBSTYLE_EX_DRAWDDARROWS; without it the WHOLE button drops down and the
+		// system draws NO arrow. We redraw the system's arrow dark in postpaint — we must not
+		// invent one, or a plain dropdown toolbar (e.g. mmc's menu band: File/Action/View) reads
+		// as a row of comboboxes. Gate on the toolbar's extended style so we only split + redraw
+		// where the system itself draws the arrow.
+		const LRESULT tbExStyle = ::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_GETEXTENDEDSTYLE, 0, 0);
+		const bool drawsDDArrow = (tbExStyle & TBSTYLE_EX_DRAWDDARROWS) != 0;
+		const bool isDropDown = drawsDDArrow && ((tbi.fsStyle & BTNS_DROPDOWN) == BTNS_DROPDOWN) && isIcon; // split: 2 "buttons"
 		if (isDropDown)
 		{
 			const auto idx = ::SendMessage(lptbcd->nmcd.hdr.hwndFrom, TB_COMMANDTOINDEX, lptbcd->nmcd.dwItemSpec, 0);

@@ -1,0 +1,7 @@
+{
+  "name": "umbra-dev",
+  "version-string": "1.1.1",
+  "description": "Build-time manifest for developing WM_UMBRA in-tree. The umbra library has no third-party dependencies; the Detours-based process-wide hooks (and the harnesses that used them) now live in the WM_NIGHT repo.",
+  "homepage": "https://github.com/martona/WM_UMBRA",
+  "dependencies": []
+}

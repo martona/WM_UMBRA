@@ -61,6 +61,10 @@ if(UMBRA_BUILD_SAMPLE)
     if(MSVC)
         target_compile_options(umbra-sample PRIVATE /utf-8)
     endif()
+
+    # NOTE: the umbra-hook / umbra-inject diagnostic + injection harnesses (and the
+    # Detours-based process-wide hooks they used) were extracted to the WM_NIGHT repo.
+    # A library-only build needs no third-party deps and no vcpkg.
 endif()
 
 # ---------------------------------------------------------------------------

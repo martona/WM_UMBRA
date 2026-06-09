@@ -288,6 +288,87 @@ namespace umbra
 	 */
 	void setSysColor(int nIndex, COLORREF color) noexcept;
 
+	/**
+	 * @brief Maps a Win32 system-color index to UMBRA's dark palette.
+	 *
+	 * The pure-data half of what used to be the process-wide GetSysColor hook:
+	 * given a `COLOR_*` index, reports whether UMBRA overrides it and, if so, the
+	 * dark `COLORREF` to serve (tracking the live palette via the `get*Color()`
+	 * accessors). The interception itself — inline-hooking the user32 exports —
+	 * is deliberately NOT here: that is an application concern (see the
+	 * `umbra-hook` harness), so the library carries the colour decision without
+	 * pulling in Detours or rewriting any process-global behaviour. Initialise
+	 * the palette (`initDarkMode` / `setDarkModeConfig` / `setDefaultColors`) for
+	 * meaningful results.
+	 *
+	 * @param nIndex   One of the `COLOR_*` system-color indices.
+	 * @param outColor Receives the dark color when the index is overridden.
+	 * @return `true` and writes @p outColor if UMBRA overrides @p nIndex;
+	 *         `false` (leaving @p outColor untouched) otherwise.
+	 */
+	[[nodiscard]] bool darkSysColor(int nIndex, COLORREF& outColor) noexcept;
+
+	/**
+	 * @brief Decides UMBRA's flat-dark override for a uxtheme background draw.
+	 *
+	 * The DrawThemeBackground analogue of @ref darkSysColor: some DUI band
+	 * backgrounds (e.g. the file-dialog address/search rebar) are painted by
+	 * uxtheme from a theme part with no dark variant, so they show as light
+	 * "splotches" that no colour query can reach. Given the theme class / part /
+	 * state a caller asked `DrawThemeBackground[Ex]` to paint, this reports whether
+	 * UMBRA wants to replace that themed part with a flat dark fill and, if so, the
+	 * fill colour. The uxtheme interception is an application concern (see the
+	 * `umbra-hook` harness); the library keeps only the decision.
+	 *
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `DrawThemeBackground`.
+	 * @param stateId   The state id from `DrawThemeBackground`.
+	 * @param outFill   Receives the flat fill colour when overridden.
+	 * @return `true` (writing @p outFill) if UMBRA overrides this background;
+	 *         `false` otherwise.
+	 */
+	[[nodiscard]] bool darkThemeBackground(const wchar_t* classList, int partId, int stateId, COLORREF& outFill) noexcept;
+
+	/**
+	 * @brief Decides UMBRA's override for a *failed* uxtheme colour query.
+	 *
+	 * The GetThemeColor analogue of @ref darkThemeBackground. Some themes define no
+	 * colour for a given part/state/prop, so `GetThemeColor` returns ELEMENT NOT FOUND
+	 * and the caller falls back to a colour the process-wide GetSysColor hook can't
+	 * reach (e.g. comctl's themed list-item text → dark-on-dark in the breadcrumb
+	 * ListviewPopup). Given the (class, part, state, prop) a caller asked for and the
+	 * real `GetThemeColor` result @p inHr, this reports whether UMBRA wants to supply a
+	 * colour — only ever for a query that actually FAILED, so a defined theme colour is
+	 * never disturbed. The uxtheme interception is an application concern (see the
+	 * `umbra-hook` harness); the library keeps only the decision.
+	 *
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `GetThemeColor`.
+	 * @param stateId   The state id from `GetThemeColor`.
+	 * @param propId    The property id from `GetThemeColor` (e.g. `TMT_TEXTCOLOR`).
+	 * @param inHr      The `HRESULT` the real `GetThemeColor` returned.
+	 * @param outColor  Receives the override colour when UMBRA overrides.
+	 * @return `true` (writing @p outColor) if UMBRA overrides this query; `false` otherwise.
+	 */
+	[[nodiscard]] bool darkThemeColor(const wchar_t* classList, int partId, int stateId, int propId, HRESULT inHr, COLORREF& outColor) noexcept;
+
+	/**
+	 * @brief Redraws the edges UMBRA's flat-fill drops, for a themed part it overrides.
+	 *
+	 * @ref darkThemeBackground replaces a whole `DrawThemeBackground[Ex]` draw with a flat
+	 * fill — which also erases the border uxtheme would have drawn. For tab items that border
+	 * carries the shape (separating adjacent tabs, outlining the active one), so an
+	 * application's uxtheme hook should call this right after applying the flat fill, on the
+	 * same `HDC`/rect, to paint a dark 1px edge back. No-op for parts that need no edge.
+	 *
+	 * @param hdc       Target device context (the one passed to `DrawThemeBackground[Ex]`).
+	 * @param classList The class list the theme was opened with, or empty/nullptr.
+	 * @param partId    The part id from `DrawThemeBackground`.
+	 * @param stateId   The state id from `DrawThemeBackground`.
+	 * @param rc        The rectangle the part was drawn into.
+	 */
+	void paintDarkThemeEdge(HDC hdc, const wchar_t* classList, int partId, int stateId, const RECT& rc) noexcept;
+
 	// ========================================================================
 	// Enhancements to DarkMode.h
 	// ========================================================================
@@ -449,6 +530,26 @@ namespace umbra
 	void setChildCtrlsSubclassAndTheme(HWND hParent, bool subclass = true, bool theme = true);
 	void setChildCtrlsTheme(HWND hParent);
 
+	/// Applies the class-specific subclass + dark theme that the child-walk gives a
+	/// control, but to `hWnd` itself (not its children) — for per-window auto-theming
+	/// hooks (e.g. the `umbra-hook` harness). Reuses the internal class dispatch.
+	void setDarkChildCtrl(HWND hWnd);
+
+	/// Themes a freshly-created window the way a per-window auto-theming hook wants
+	/// on `WM_CREATE`: `setDarkWndNotifySafe` (window canvas + ctl-color) +
+	/// `setDarkChildCtrl` (class-specific) + a menu-bar subclass when the window owns
+	/// a menu. The hook-free decision half of the old `setAutoDarkMode`; the
+	/// interception (a `WH_CALLWNDPROCRET` hook, a `CreateThread` detour) lives in
+	/// the application (see the `umbra-hook` harness). Safe to call repeatedly.
+	void applyDarkToNewWindow(HWND hWnd);
+
+	/// Early per-window dark-mode prep for a `WH_CALLWNDPROC` hook: allows dark mode on
+	/// a just-created window (on `WM_NCCREATE`) BEFORE it opens its theme, so DUI/uxtheme
+	/// can resolve the dark theme variant. Deliberately does NOT call `SetWindowTheme`
+	/// (which breaks shell items-view selection). Complements @ref applyDarkToNewWindow
+	/// (the full `WH_CALLWNDPROCRET` pass that runs after `WM_CREATE`).
+	void prepDarkModeForNewWindow(HWND hWnd);
+
 	// ========================================================================
 	// Window, Parent, And Other Subclassing
 	// ========================================================================
@@ -457,6 +558,15 @@ namespace umbra
 	void setWindowEraseBgSubclass(HWND hWnd);
 	/// Removes the subclass used for `WM_ERASEBKGND` message handling.
 	void removeWindowEraseBgSubclass(HWND hWnd);
+
+	/// Applies the dialog client backfill subclass: after the dialog paints, re-fills the
+	/// client (clipping visible children) with the dark dialog brush. For dialogs that fill
+	/// their background from a cached/private brush in `WM_PAINT` — the classic MessageBox
+	/// button band — which no erase/ctl-color subclass or colour/theme hook can reach. Install
+	/// OUTERMOST (after the erase/ctl-color subclasses) so its `WM_PAINT` runs first.
+	void setWindowBackfillSubclass(HWND hWnd);
+	/// Removes the dialog client backfill subclass.
+	void removeWindowBackfillSubclass(HWND hWnd);
 
 	/// Applies window subclassing to handle `WM_CTLCOLOR*` messages.
 	void setWindowCtlColorSubclass(HWND hWnd);

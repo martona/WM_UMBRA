@@ -371,7 +371,12 @@ FodyWeavers.xsd
 /.vscode/
 /build/
 /log/
+/logs/
 /backup/
+
+# vcpkg manifest-mode install tree (Detours, etc.)
+vcpkg_installed/
 
 # claude
 .claude/settings.local.json
+HANDOFF.md
